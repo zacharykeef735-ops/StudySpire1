@@ -1,6 +1,22 @@
 # StudySpire1 — Organizations & Schools 🏫
 
-**A distinct school-management version of StudySpire. No AWS.** The original `StudySpire` repo is not changed by work in this repo.
+**A distinct school-management version of StudySpire. No AWS.** School-specific features remain exclusive to this repository; shared account UX improvements can be applied to both repos.
+
+## Join a school by code (October 2026)
+
+Students and teachers can **apply to join a school themselves**—no one has to manually locate their username first.
+
+1. Sign in with a StudySpire **username and password**. The **🏫 Organizations & Schools** menu is visible even when you have no school membership.
+2. Select **Join a school** and enter the **organization code** and **school code** supplied by a school leader. You can also open a join link shared by your school; it pre-fills both codes.
+3. Choose **Student** or **Teacher**, add an optional message, and submit. Your application is **pending** until approved. You can see its status or cancel it under **My applications**.
+4. A principal, organization administrator, or platform Owner opens that school and reviews the **School join requests** queue. Approving a request adds the account to the school with exactly the requested student/teacher role.
+5. A principal or Owner can then assign the newly approved member to a class. **Joining a school does not automatically enroll you in every class.**
+
+School leaders can use **Copy school join link**. The link is not a permission token: every applicant still needs approval. Applicants cannot choose Principal, Org Admin, Co-Owner, or Owner. Direct role escalation and cross-school approval are blocked by server-side checks, with request limits and audit records.
+
+The new SQL file, studyspire1-school-join.sql, adds the private request queue and guarded application/approval RPCs. Apply it after the organization/school and classroom migrations on any new StudySpire1 backend. It is already installed in the currently connected backend.
+
+---
 
 ## New: School classroom workspace (October 2026)
 
@@ -18,7 +34,8 @@ Database setup for a new StudySpire1 project:
 1. Install the original StudySpire schema and earlier migrations in their documented order.
 2. Apply studyspire1-organizations-schools.sql.
 3. Apply studyspire1-academics.sql.
-4. Verify the new tables have RLS enabled and no direct anon/authenticated table SELECT grants. The published classroom RPCs require a verified account and server-side class/school role checks.
+4. Apply studyspire1-school-join.sql.
+5. Verify the new tables have RLS enabled and no direct anon/authenticated table SELECT grants. The published classroom RPCs require a verified account and server-side class/school role checks.
 
 The classroom migration was applied to the currently connected Supabase project on October 29, 2026. **StudySpire and StudySpire1 still share that backend and Cloud logins**; use a dedicated Supabase project before storing production student records. No AWS is needed. Smoke test: run node --test tests/studyspire-planner.test.cjs.
 
@@ -144,12 +161,7 @@ StudySpire combines study and productivity features in a dark-themed browser int
 
 You can use browser-local study features without creating a cloud account. A StudySpire cloud account adds username/password sign-in, personal cloud study storage, and access to the appropriate dashboard for a user's role.
 
-**Two distinct kinds of accounts exist:**
-
-- **Cloud accounts:** Supabase-backed identities. New accounts use a username and password without an email address. Each account has its own study data and server-assigned permissions.
-- **Older email accounts:** Existing Supabase email/password accounts remain available through the **Older email account** sign-in option.
-  
-An older browser-local demo administrator is **not** the same as a Supabase Cloud Owner.
+**Cloud sign-in uses username and password only.** New accounts require no email. Study data and roles remain server-scoped. Browser-local demo accounts are separate from Cloud accounts, and a local demo administrator is not a Supabase Cloud Owner.
 
 ### The StudySpire home dashboard
 
@@ -242,9 +254,7 @@ StudySpire remembers up to eight **usernames only** on this browser. Choose a re
 
 While signed into a **username account**, open **Manage account → Change my password**. Enter the current password, a different new password (at least ten characters, 72 bytes maximum), and confirmation. The password change is checked securely on the server; incorrect attempts are rate-limited, and other devices must sign in again after a successful change.
 
-Older **email accounts** continue to use Supabase's normal email/password features. The username-password change panel is intended for username accounts only.
-
-Older email-based users can select **Older email account** and use their existing credentials. Creating a new username account does not automatically merge it with an older email account.
+**The older email-account sign-in option has been removed.** Existing database records were not deleted. The sign-in and password-reset screens now support username accounts only.
 
 ### Move study content between accounts
 

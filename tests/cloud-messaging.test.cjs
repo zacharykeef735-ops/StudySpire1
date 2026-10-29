@@ -12,7 +12,7 @@ test('messaging scripts parse and load after study suite and Cloud auth',()=>{
  assert.doesNotThrow(()=>new Function(ui));
  assert.doesNotThrow(()=>new Function(cloud));
  assert.doesNotThrow(()=>new Function(suite));
- const starts=['suite.js?v=3.80','cloud.js?v=4.14','enhancements.js?v=3.81','messaging.js?v=3.95'].map(name=>html.indexOf('src="'+name+'"'));
+ const starts=['suite.js?v=3.80','cloud.js?v=4.15','enhancements.js?v=3.81','messaging.js?v=3.95'].map(name=>html.indexOf('src="'+name+'"'));
  assert.ok(starts.every(x=>x>=0),'Missing messaging or Cloud source');
  assert.deepEqual(starts,[...starts].sort((a,b)=>a-b));
  assert.match(html,/messaging\.css\?v=3\.82/);
