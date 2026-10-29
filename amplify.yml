@@ -1,0 +1,15 @@
+version: 1
+frontend:
+  phases:
+    build:
+      commands:
+        - mkdir -p dist
+        - 'for f in *.html *.js *.css *.svg; do if [ -f "$f" ]; then cp "$f" dist/; fi; done'
+        - >-
+          node -e 'const fs=require("fs");const raw=process.env.STUDYSPIRE_AWS_AI_URL||"";if(raw){const u=new URL(raw);if(u.protocol!=="https:"||u.username||u.password||u.search||u.hash||u.pathname!=="/")throw Error("STUDYSPIRE_AWS_AI_URL must be an HTTPS origin");fs.writeFileSync("dist/aws-ai-config.js","window.STUDYSPIRE_AWS_AI = "+JSON.stringify({url:u.origin})+";\n");}'
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths: []
