@@ -1,0 +1,41 @@
+/* StudySpire Smart Planner, deliberately scoped to its own modal. */
+#sspOverlay[hidden],#sspOverlay [hidden]{display:none!important}
+.ssp-overlay{position:fixed;inset:0;z-index:21000;background:rgba(5,12,27,.83);display:grid;place-items:center;padding:16px;color:#eff6ff}
+.ssp-dialog{width:min(990px,100%);max-height:94vh;overflow:auto;overscroll-behavior:contain;box-sizing:border-box;border:1px solid #32517b;border-radius:18px;background:#0c1d35;box-shadow:0 24px 80px #0008;padding:20px;font:14px/1.5 system-ui,Segoe UI,sans-serif}
+.ssp-dialog header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.ssp-dialog header h2{font-size:24px;margin:3px 0}.ssp-dialog header p{margin:0;color:#a8bedf}
+.ssp-dialog header small{color:#7fb4ff;font-weight:800;letter-spacing:.12em}
+.ssp-close{background:transparent;color:#c6d6ec;border:1px solid #4f6f94;border-radius:8px;padding:8px 12px;cursor:pointer}
+.ssp-tabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:1px solid #375070;padding:18px 0 10px;margin-bottom:14px}
+.ssp-tabs button{padding:8px 12px;border:0;border-radius:7px;background:transparent;color:#b7cbe6;cursor:pointer}
+.ssp-tabs .active{background:#214d81;color:white}
+.ssp-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));align-items:end;gap:9px;margin-bottom:16px}
+.ssp-form label,.ssp-dialog #sspBackup>label{display:grid;gap:4px;color:#c0d3ed;font-size:12px;font-weight:700}
+.ssp-form input,.ssp-form select,#sspSearch,.ssp-dialog #sspBackup>label input{width:100%;box-sizing:border-box;background:#142a47;color:#fff;border:1px solid #3e5b80;border-radius:8px;padding:9px;font-size:14px}
+.ssp-form input:focus,.ssp-form select:focus,#sspSearch:focus,.ssp-dialog button:focus-visible{outline:2px solid #82bfff;outline-offset:2px}
+.ssp-button{border:1px solid #41648d;color:#e5f2ff;background:#1c3655;border-radius:8px;padding:9px 12px;cursor:pointer;white-space:nowrap}
+.ssp-button.primary{background:linear-gradient(110deg,#2680dc,#6657d5);border-color:transparent}
+.ssp-button.quiet{padding:6px 9px;background:transparent;color:#acc9eb}
+.ssp-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px}
+.ssp-grid section{border:1px solid #345073;border-radius:12px;padding:13px;min-width:0}
+.ssp-dialog h3{font-size:16px;margin:12px 0}
+.ssp-item{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #2b4362}
+.ssp-item:last-child{border:0}.ssp-item.completed .ssp-item-info strong{text-decoration:line-through;opacity:.65}
+.ssp-item-info{display:grid;gap:3px;min-width:0;flex:1;overflow-wrap:anywhere}
+.ssp-item-info small{color:#9eb9d9}.ssp-item input[type=checkbox]{accent-color:#6caefe;width:18px;height:18px}
+.ssp-muted{color:#9bb6d7}.ssp-session{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid #2b4362}
+.ssp-session b{font-weight:800;color:#74b8ff}
+.ssp-notice{background:#163a65;border-radius:7px;padding:9px;color:#e9f5ff}
+.ssp-flash{border:1px solid #3d6292;border-radius:12px;background:#122c4e;text-align:center;padding:20px;margin:12px 0}
+.ssp-flash h3{font-size:20px}.ssp-flash p{padding:12px;background:#1c416d;border-radius:8px;white-space:pre-wrap}
+.ssp-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.ssp-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.ssp-metric{display:grid;gap:5px;background:#142c4b;border:1px solid #345777;padding:15px;border-radius:10px}
+.ssp-metric strong{font-size:26px}.ssp-metric small{color:#a7c5e5}
+.ssp-chart{display:flex;align-items:end;height:140px;gap:12px;padding:14px;border:1px solid #345777;border-radius:10px}
+.ssp-col{display:flex;align-items:center;flex:1;flex-direction:column;justify-content:flex-end;height:100%;gap:6px}
+.ssp-bar{display:block;min-height:5px;width:80%;max-width:42px;background:#629eea;border-radius:5px}
+.ssp-col small{color:#b5cceb}
+#sspTop,#sspNav{cursor:pointer}#sspTop{font-size:13px}
+@media(max-width:700px){.ssp-dialog{padding:13px;max-height:96vh}.ssp-grid{grid-template-columns:1fr}.ssp-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ssp-dialog header h2{font-size:20px}}
+@media(prefers-reduced-motion:reduce){.ssp-dialog *{scroll-behavior:auto}}
