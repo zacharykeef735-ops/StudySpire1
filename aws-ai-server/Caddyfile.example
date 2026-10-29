@@ -1,5 +1,0 @@
-# Replace with an actual HTTPS hostname pointing to your EC2 public IP.
-ai.example.org {
-  encode zstd gzip
-  reverse_proxy 127.0.0.1:8000
-}
