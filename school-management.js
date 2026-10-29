@@ -69,9 +69,8 @@ function mountNav(){
  makeManager();
  const nav=document.querySelector('.sidebar .sd-nav-group .nav')||document.querySelector('.sidebar .nav');
  if(nav){
-  const b=action('','');
+  const b=el('button');b.type='button';
   b.id='ssSchoolsNav';b.className='ss-sm-nav';b.innerHTML='<span class="navicon">🏫</span><span class="sd-navtext">Organizations & Schools</span>';
-  b.replaceWith; // No-op property reference; nothing is inserted until after handler installation.
   b.addEventListener('click',open);nav.append(b);
  }
  const top=document.querySelector('.topright');
@@ -181,7 +180,7 @@ function renderSchool(host,org,school){
    const role=select.value;
    if(!confirm('Assign @'+username+' as '+role+' at '+school.name+'?'))return;
    await bridge().rpc('ss_school_set_member',{p_school:school.id,p_username:username,p_role:role});
-  },[u,r]));
+  },[u,{holder:r,input:select}]));
  }
  block.append(roster);
  const classes=el('div',null,'ss-sm-roster');
