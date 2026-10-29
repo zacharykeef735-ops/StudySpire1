@@ -45,5 +45,7 @@ test('server restricts tokens and revokes every device when password changes',()
  assert.match(migration,/after update of password_hash on ss_private\.username_credentials/);
  assert.match(migration,/delete from ss_private\.remembered_login_tokens where user_id = new\.user_id/);
  assert.match(migration,/auth\.jwt\(\)->>'is_anonymous'/);
+ const mapping=migration.slice(migration.indexOf('create or replace function public.ss_current_profile_id()'),migration.indexOf('-- Only a live, anonymous Supabase session'));
+ assert.match(mapping,/as \$\$[\s\S]*\$\$;/);
  assert.match(migration,/grant execute on function public\.ss_remember_current_username/);
 });

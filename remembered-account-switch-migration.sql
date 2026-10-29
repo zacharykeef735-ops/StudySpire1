@@ -30,7 +30,7 @@ create or replace trigger ss_revoke_remembered_on_password_change
 -- An anonymous auth identity is not itself proof of an app username session.
 -- Only legacy non-anonymous email accounts may use the profile-id fallback.
 create or replace function public.ss_current_profile_id()
-returns uuid language sql stable security definer set search_path = '' as $
+returns uuid language sql stable security definer set search_path = '' as $$
   select coalesce(
     (select s.user_id from ss_private.username_sessions s
       where s.session_uid=(select auth.uid())),
@@ -38,7 +38,7 @@ returns uuid language sql stable security definer set search_path = '' as $
       where p.id=(select auth.uid())
         and coalesce(auth.jwt()->>'is_anonymous','false') <> 'true')
   );
-$;
+$$;
 
 -- Only a live, anonymous Supabase session mapped to a username account
 -- may issue a fresh saved-login token. Keep at most 24 tokens per account.
