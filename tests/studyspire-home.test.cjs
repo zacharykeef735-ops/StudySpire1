@@ -25,7 +25,7 @@ test('StudySpire branding and Academic AI appear on the actual site',()=>{
 
 test('home scripts load after existing features and tool navigation is complete',()=>{
   assert.doesNotThrow(()=>new Function(js));
-  const scripts=['suite.js?v=3.80','cloud.js?v=4.15','enhancements.js?v=3.81',
+  const scripts=['suite.js?v=3.80','cloud.js?v=4.16','enhancements.js?v=3.81',
     'messaging.js?v=3.95','help-guide.js?v=3.94','studyspire-home.js?v=3.94'];
   const positions=scripts.map(s=>html.indexOf('src="'+s+'"'));
   assert.ok(positions.every(p=>p>0));

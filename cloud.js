@@ -20,7 +20,37 @@ function rememberUsername(username){
  try{localStorage.setItem(RECENT_USERNAMES,JSON.stringify([name,...savedUsernames().filter(v=>v!==name)].slice(0,8)))}catch(_){}
 }
 function forgetUsername(username){
+ forgetDeviceToken(username);
  try{localStorage.setItem(RECENT_USERNAMES,JSON.stringify(savedUsernames().filter(v=>v!==username)))}catch(_){}
+}
+const REMEMBERED_TOKENS='ss-cloud-remembered-device-v1';
+function deviceTokens(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(REMEMBERED_TOKENS)||'{}');
+  if(!saved||typeof saved!=='object'||Array.isArray(saved))return {};
+  return Object.fromEntries(Object.entries(saved).filter(([n,t])=>/^[a-z0-9_-]{3,32}$/.test(n)&&typeof t==='string'&&/^[0-9a-f]{64}$/.test(t)).slice(0,8));
+ }catch(_){return {}}
+}
+const deviceToken=name=>deviceTokens()[name]||'';
+function storeDeviceToken(name,token){
+ if(!/^[a-z0-9_-]{3,32}$/.test(name)||!/^[0-9a-f]{64}$/.test(token))return;
+ try{localStorage.setItem(REMEMBERED_TOKENS,JSON.stringify({[name]:token,...Object.fromEntries(Object.entries(deviceTokens()).filter(([n])=>n!==name).slice(0,7))}))}catch(_){}
+}
+function forgetDeviceToken(name){
+ const tokens=deviceTokens();delete tokens[name];
+ try{localStorage.setItem(REMEMBERED_TOKENS,JSON.stringify(tokens))}catch(_){}
+}
+async function rememberCurrentDevice(name){
+ if(!client||!/^[a-z0-9_-]{3,32}$/.test(name))return;
+ try{
+  const {data,error}=await client.rpc('ss_remember_current_username');
+  if(error)throw error;
+  if(typeof data==='string'&&/^[0-9a-f]{64}$/.test(data)){
+   const previous=deviceToken(name);
+   storeDeviceToken(name,data);rememberUsername(name);
+   if(previous&&previous!==data)client.rpc('ss_forget_remembered_username',{device_token:previous}).then(()=>{});
+  }
+ }catch(error){console.warn('Remembered sign-in unavailable:',error?.message||error)}
 }
 window.StudySummitCloudHealth=()=>({configured:ready,signedIn:!!person,username:profile?.username||'',role,active:!!live,syncing:!!syncing,lastSyncAt,syncError:lastSyncError});
 
@@ -43,13 +73,13 @@ function setStudy(items){syncing=true;try{if(!items||typeof items!=='object'||Ar
     }
   }finally{syncing=false}}
 /* Username + password is the only interactive sign-in option. Existing sessions remain compatible. */
-let authMethod='username',sessionMethod='email';
+let authMethod='username',sessionMethod='email',switchingRemembered=false;
 function showGate(kind='login'){
  let gate=$('ssCloudGate');if(!gate){gate=document.createElement('section');gate.id='ssCloudGate';document.body.append(gate)}
  gate.hidden=false;gate.innerHTML=`<div class="ssc-shell"><div class="ssc-mark">✦</div><div class="ssc-title-row"><div class="ssc-heading">StudySpire <span>Cloud</span></div><button id="ssc-close" type="button" class="ssc-light" hidden aria-label="Close account menu">✕ Close</button></div>
  <p id="ssCloudNotice" class="ssc-muted" role="status" aria-live="polite">Your study space, on any device.</p>
  <div id="ssc-loginArea">
-  <div id="ssc-recent" hidden><b class="ssc-recent-label">Accounts used on this browser</b><div id="ssc-recentList" class="ssc-recentList"></div><p class="ssc-caption">Only usernames are remembered here; sign-in always requires a password.</p></div><div id="ssc-userRow"><label for="ssc-user">Username</label><input id="ssc-user" autocomplete="username" placeholder="Your username" maxlength="32" spellcheck="false" autocapitalize="none"/></div>
+  <div id="ssc-recent" hidden><b class="ssc-recent-label">Accounts used on this browser</b><div id="ssc-recentList" class="ssc-recentList"></div><p class="ssc-caption">Tap a remembered account to switch instantly. If its password changed, enter the new one once.</p></div><div id="ssc-userRow"><label for="ssc-user">Username</label><input id="ssc-user" autocomplete="username" placeholder="Your username" maxlength="32" spellcheck="false" autocapitalize="none"/></div>
   <label for="ssc-pass">Password</label><input id="ssc-pass" type="password" autocomplete="current-password" placeholder="At least 10 characters for new accounts" minlength="8"/><button id="ssc-showpass" type="button" class="ssc-light ssc-password-toggle" aria-pressed="false" aria-controls="ssc-pass">Show password</button>
   <div class="ssc-row"><button id="ssc-login" type="button">Sign in</button><button id="ssc-register" type="button" class="ssc-light">Create account</button></div><button id="ssc-forgot" class="ssc-light ssc-forgot" type="button">Forgot password? Owner-assisted reset</button><div id="ssc-recovery" hidden><p class="ssc-caption">A verified account holder can request a one-time code from an Owner. Your replacement password is only entered here.</p><label for="ssc-resetUser">Username</label><input id="ssc-resetUser" autocomplete="username" maxlength="32" placeholder="Username"/><button id="ssc-requestReset" class="ssc-light" type="button">Request reset</button><label for="ssc-resetCode">Recovery code</label><input id="ssc-resetCode" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit code"/><label for="ssc-newPassword">New password</label><input id="ssc-newPassword" autocomplete="new-password" type="password" placeholder="At least 10 characters"/><div class="ssc-row"><button id="ssc-completeReset" type="button">Set new password</button><button id="ssc-cancelReset" class="ssc-light" type="button">Back to sign in</button></div></div>
   <p id="ssc-recoveryInfo" class="ssc-caption">No email needed. If you forget your password, request an Owner-approved six-digit recovery code.</p>
@@ -59,8 +89,10 @@ function showGate(kind='login'){
  <div class="ssc-row"><button id="ssc-all" type="button" class="ssc-light">Export all study data</button><button id="ssc-check" type="button" class="ssc-light">Check ban status</button></div>
  <p class="ssc-caption">Downloads are available for the account owner. A ban doesn't delete your notes.</p></div>
  <div id="ssc-current-actions" hidden>
-  <p class="ssc-caption">Signed in as @${escapeHTML(profile?.username||'account')}. Switching accounts signs out first; existing study data stays separate.</p>
+  <p class="ssc-caption">Signed in as @${escapeHTML(profile?.username||'account')}. Tap a remembered account to switch instantly; your study data stays separate.</p>
   <div class="ssc-row"><button id="ssc-switch-account" class="ssc-light" type="button">⇄ Switch account</button><button id="ssc-new-account" class="ssc-light" type="button">＋ Add account</button></div>
+   <div id="ssc-switchList" class="ssc-switchList" hidden><b class="ssc-recent-label">Accounts remembered on this browser</b><div id="ssc-switchNames" class="ssc-recentList"></div><p class="ssc-caption">Anyone with access to this browser can open a remembered account. Use × to remove saved access.</p><button id="ssc-other-account" class="ssc-light" type="button">Use another username</button></div>
+   <button id="ssc-save-current" class="ssc-light ssc-save-current" type="button">✓ Remember this account on this device</button>
   <details id="ssc-passwordSettings" class="ssc-change-pass" ${sessionMethod==='username'?'':'hidden'}><summary>🔒 Change my password</summary>
    <label for="ssc-oldPass">Current password</label><input id="ssc-oldPass" type="password" autocomplete="current-password" placeholder="Current password"/>
    <label for="ssc-nextPass">New password</label><input id="ssc-nextPass" type="password" autocomplete="new-password" placeholder="At least 10 characters"/>
@@ -110,18 +142,64 @@ function showGate(kind='login'){
  $('ssc-deleteAccount').onclick=confirmAccountDeletion;
 
  const setMethod=()=>{authMethod='username';$('ssc-recoveryInfo').textContent='No email needed. Ask an Owner for a six-digit password recovery code if you forget your password.';$('ssc-pass').value='';$('ssc-pass').type='password';$('ssc-showpass').textContent='Show password';$('ssc-showpass').setAttribute('aria-pressed','false');renderRecentAccounts();};
+  async function chooseSavedAccount(name){
+    if(switchingRemembered)return;
+    const token=deviceToken(name);
+    if(!token)return requirePasswordFor(name,'Enter your password once to remember @'+name+' on this device.');
+    switchingRemembered=true;
+    cloudNotice('Switching to @'+name+'…');
+    try{
+      // Finish any pending outgoing upload before changing the server-side identity.
+      if(person&&live&&!banned(profile))await uploadSnapshot();
+      await lastUpload;
+      await ensureAnonymous();
+      const {data,error}=await client.rpc('ss_remembered_switch',{chosen_username:name,device_token:token});
+      if(error)throw error;
+      if(data!==true){
+        forgetDeviceToken(name);
+        return requirePasswordFor(name,'The saved sign-in for @'+name+' is no longer valid. Enter the current password once.');
+      }
+      clearTimeout(syncTimer);live=false;remote=null;lastSnapshot='';
+      sessionStorage.removeItem('ssCloudApplied');
+      sessionStorage.removeItem('studydoc-active-account');
+      location.reload();
+    }catch(error){cloudNotice('Could not switch accounts: '+(error?.message||error))}
+    finally{switchingRemembered=false}
+  }
+  function requirePasswordFor(name,message){
+    if(person){
+      sessionStorage.setItem('ss-cloud-switch-username',name);
+      sessionStorage.setItem('ss-cloud-next-action','switch');
+      cloudNotice(message);
+      return signOutCloud();
+    }
+    $('ssc-user').value=name;$('ssc-pass').value='';$('ssc-pass').focus();
+    cloudNotice(message);
+  }
+  function renderSavedIn(list,names){
+    list.replaceChildren();
+    for(const name of names){
+     const wrap=document.createElement('span');wrap.className='ssc-recentItem';
+     const choose=document.createElement('button');choose.type='button';choose.className='ssc-light';
+     const active=Boolean(person&&profile?.username===name);
+     choose.textContent='@'+name+(active?' · Current':deviceToken(name)?' · Tap to switch':' · Password needed');
+     choose.disabled=active;choose.onclick=()=>chooseSavedAccount(name);
+     const remove=document.createElement('button');remove.type='button';remove.className='ssc-light';remove.textContent='×';
+     remove.title='Forget @'+name+' on this device';remove.setAttribute('aria-label',remove.title);
+     remove.onclick=async()=>{
+       const token=deviceToken(name);
+       forgetDeviceToken(name);forgetUsername(name);renderRecentAccounts();
+       if(token&&client){try{const {data:sessionData}=await client.auth.getSession();if(!sessionData?.session)await ensureAnonymous();else if(!sessionData.session.user?.is_anonymous)return;await client.rpc('ss_forget_remembered_username',{device_token:token})}catch(_){}}
+     };
+     wrap.append(choose,remove);list.append(wrap);
+    }
+  }
  function renderRecentAccounts(){
-   const host=$('ssc-recent'),list=$('ssc-recentList');if(!host||!list)return;
-   list.replaceChildren();const names=savedUsernames();host.hidden=!names.length;
-   for(const name of names){
-    const wrap=document.createElement('span');wrap.className='ssc-recentItem';
-    const choose=document.createElement('button');choose.type='button';choose.className='ssc-light';
-    choose.textContent='@'+name;choose.onclick=()=>{$('ssc-user').value=name;$('ssc-pass').focus();cloudNotice('Enter the password for @'+name+'.')};
-    const remove=document.createElement('button');remove.type='button';remove.className='ssc-light';remove.textContent='×';
-    remove.title='Forget @'+name+' from this device';remove.setAttribute('aria-label',remove.title);
-    remove.onclick=()=>{forgetUsername(name);renderRecentAccounts()};
-    wrap.append(choose,remove);list.append(wrap)
-   }
+   const host=$('ssc-recent'),list=$('ssc-recentList');
+   const names=savedUsernames();
+   if(host&&list){host.hidden=!names.length;renderSavedIn(list,names)}
+   const switchList=$('ssc-switchList'),switchNames=$('ssc-switchNames');
+   if(switchList&&switchNames){renderSavedIn(switchNames,names);if(!names.length&&$('ssc-other-account'))$('ssc-other-account').textContent='Sign in to another account'}
  }
  $('ssc-showpass').onclick=()=>{const password=$('ssc-pass');const reveal=password.type==='password';password.type=reveal?'text':'password';$('ssc-showpass').textContent=reveal?'Hide password':'Show password';$('ssc-showpass').setAttribute('aria-pressed',String(reveal));};
  $('ssc-close').onclick=()=>{if(person&&!banned(profile))gate.hidden=true;};
@@ -137,7 +215,7 @@ function showGate(kind='login'){
      await ensureAnonymous();phase='creating your username account';
      const {error}=await client.rpc('ss_username_register',{chosen_username,chosen_password:password});
      if(error)throw Error(error.message);
-     cloudNotice('Account created. Loading StudySpire…');await boot();
+     await rememberCurrentDevice(chosen_username);cloudNotice('Account created. Loading StudySpire…');await boot();
    }catch(err){
      const message=String(err?.message||err);
      cloudNotice('Could not create account ('+phase+'): '+message);
@@ -152,7 +230,7 @@ function showGate(kind='login'){
   if(password.length<10||new TextEncoder().encode(password).length>72)return cloudNotice('Password must be 10 characters minimum, 72 bytes maximum.');
   const btn=$('ssc-completeReset');btn.disabled=true;try{await ensureAnonymous();const {data,error}=await client.rpc('ss_complete_password_reset',{chosen_username:username,recovery_code:code,new_password:password});if(error)throw error;
    if(data!==true)return cloudNotice('Invalid, expired or used recovery code.');
-   $('ssc-newPassword').value='';$('ssc-resetCode').value='';$('ssc-recovery').hidden=true;$('ssc-user').value=username;cloudNotice('Password updated. Sign in with your new password.');
+   forgetDeviceToken(username);$('ssc-newPassword').value='';$('ssc-resetCode').value='';$('ssc-recovery').hidden=true;$('ssc-user').value=username;renderRecentAccounts();cloudNotice('Password updated. Sign in with your new password.');
   }catch(e){cloudNotice('Reset failed: '+(e.message||e))}finally{btn.disabled=false}};
  $('ssc-login').onclick=async()=>{
    const password=$('ssc-pass').value,chosen_username=$('ssc-user').value.trim().toLowerCase();
@@ -164,16 +242,22 @@ function showGate(kind='login'){
      const {data,error}=await client.rpc('ss_username_login',{chosen_username,chosen_password:password});
      if(error)throw Error(error.message);
      if(data!==true){cloudNotice('Incorrect username or password, or account temporarily locked.');return}
-     cloudNotice('Signed in. Loading StudySpire…');await boot();
+     await rememberCurrentDevice(chosen_username);cloudNotice('Signed in. Loading StudySpire…');await boot();
    }catch(err){cloudNotice('Could not sign in ('+phase+'): '+(err.message||err))}
  };
  $('ssc-pass').onkeydown=e=>{if(e.key==='Enter')$('ssc-login').click()};
  $('ssc-logout').onclick=signOutCloud;
  async function switchCloudAccount(next){
    if(!person||signingOut)return;
-   if(!confirm('Sign out of @'+(profile?.username||'your account')+' and '+(next==='register'?'add an account':'switch accounts')+'? Your study data remains saved.'))return;
+   if(next==='switch'){
+     const list=$('ssc-switchList');if(list){list.hidden=!list.hidden;renderRecentAccounts();}
+     cloudNotice('Choose a remembered account. If a password changed, you’ll enter the new one once.');return;
+   }
+   if(!confirm('Sign out of @'+(profile?.username||'your account')+' and add an account? Your study data remains saved.'))return;
    sessionStorage.setItem('ss-cloud-next-action',next);await signOutCloud();
  }
+ $('ssc-other-account').onclick=()=>{sessionStorage.setItem('ss-cloud-next-action','switch');signOutCloud()};
+ $('ssc-save-current').onclick=async()=>{if(!person||sessionMethod!=='username')return;const btn=$('ssc-save-current');btn.disabled=true;await rememberCurrentDevice(profile.username);renderRecentAccounts();cloudNotice(deviceToken(profile.username)?'@'+profile.username+' is remembered on this browser.':'Could not remember this account. Try again.');btn.disabled=false;};
  $('ssc-new-account').onclick=()=>switchCloudAccount('register');
  $('ssc-switch-account').onclick=()=>switchCloudAccount('switch');
  $('ssc-changePassword').onclick=async()=>{
@@ -189,6 +273,7 @@ function showGate(kind='login'){
     if(error)throw error;
     if(data!==true)return cloudNotice('Incorrect current password or account temporarily locked.');
     $('ssc-oldPass').value='';$('ssc-nextPass').value='';$('ssc-nextPassAgain').value='';
+    forgetDeviceToken(profile.username);await rememberCurrentDevice(profile.username);renderRecentAccounts();
     cloudNotice('Password changed successfully. Other devices must sign in again.');
    }catch(e){cloudNotice('Could not change password: '+(e?.message||e))}
    finally{button.disabled=false}
@@ -203,10 +288,11 @@ function showGate(kind='login'){
   const next=sessionStorage.getItem('ss-cloud-next-action');
   if(next==='register'||next==='switch'){
     sessionStorage.removeItem('ss-cloud-next-action');
-    cloudNotice(next==='register'?'Add an account: choose a fresh username and password.':'Select a previously used account or type another username, then enter its password.');
+    cloudNotice(next==='register'?'Add an account: choose a fresh username and password.':'Select a remembered account or enter the password for another username.');
     if(next==='register')$('ssc-user')?.focus();
   }
  }
+ if(kind==='login'&&!person){const pending=sessionStorage.getItem('ss-cloud-switch-username');if(pending){sessionStorage.removeItem('ss-cloud-switch-username');$('ssc-user').value=pending;cloudNotice('Enter the current password for @'+pending+' once to remember it again.')}}
  $('ssc-close').hidden=!(person&&kind==='account'&&!banned(profile));
  if(kind==='banned')showBanned();
  return gate;
@@ -893,7 +979,7 @@ function addStyling(){const style=document.createElement('style');style.textCont
 .ssc-recentList{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
 .ssc-recent-label{font-size:12px}
 .ssc-recentItem{display:inline-flex;gap:3px}
-.ssc-recentItem button{padding:6px 10px!important;font-size:12px!important}
+.ssc-recentItem button{padding:6px 10px!important;font-size:12px!important}.ssc-recentItem button:disabled{opacity:.65;cursor:default}.ssc-switchList{margin:14px 0;padding:13px;border:1px solid #40526e;border-radius:10px}.ssc-switchList[hidden]{display:none!important}.ssc-switchList .ssc-caption{margin:10px 0}.ssc-save-current{margin:12px 0;width:100%;font-size:12px!important}
 .ssc-change-pass{margin:14px 0;border:1px solid #40526e;padding:12px;border-radius:10px}
 .ssc-change-pass summary{cursor:pointer;font-weight:700}
 .ssc-change-pass[hidden]{display:none!important}

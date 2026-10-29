@@ -22,7 +22,7 @@ test('all extracted and newly added scripts have valid JavaScript',()=>{
   }
 });
 test('external scripts load in dependency order and cache-busting version',()=>{
-  const suitePos=html.indexOf('src="suite.js?v=3.80"'),cloudPos=html.indexOf('src="cloud.js?v=4.15"'),enhancementsPos=html.indexOf('src="enhancements.js?v=3.81"');
+  const suitePos=html.indexOf('src="suite.js?v=3.80"'),cloudPos=html.indexOf('src="cloud.js?v=4.16"'),enhancementsPos=html.indexOf('src="enhancements.js?v=3.81"');
   assert.ok(suitePos>0&&cloudPos>suitePos&&enhancementsPos>cloudPos);
   assert.match(html,/enhancements\.css\?v=3\.84/);
   assert.ok(html.indexOf('src="help-guide.js?v=3.94"')>enhancementsPos,'Help should load after the study enhancements');
@@ -43,7 +43,7 @@ test('password-change requires old password, mapped session and server authoriza
   assert.match(cloud,/current_password:old,new_password:next/);
   assert.match(cloud,/data!==true/);
   assert.match(cloud,/RECENT_USERNAMES/);
-  assert.match(cloud,/never passwords|Only usernames|Only usernames are remembered/i);
+  assert.match(cloud,/never passwords|Only usernames|Tap a remembered account/i);
 });
 test('progress is calculated from existing suite data and separated per account',()=>{
   const saved=new Map(),window={sdAccountKey:name=>window.account+'::'+name,addEventListener:()=>{},dispatchEvent:()=>{},account:'A'};
