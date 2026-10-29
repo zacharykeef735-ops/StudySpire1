@@ -436,6 +436,20 @@ window.StudySummitMessagingBridge={
 };
 // Optional hosted tutor uses the signed-in StudySpire account.
 // AI provider tokens are held ONLY by the Supabase Edge Function.
+// School management RPCs: never send API secrets, never trust client role flags.
+// Supabase validates the canonical profile and organization/school scope on every action.
+window.StudySpireSchoolBridge={
+ ready:()=>Boolean(ready&&client&&live&&person&&profile&&!banned(profile)),
+ account:()=>live&&profile&&!banned(profile)?{username:profile.username,role:profile.role}:null,
+ rpc:async(name,args={})=>{
+  const allowed=new Set(['ss_school_overview','ss_school_create_organization','ss_school_create_school','ss_school_set_admin','ss_school_set_member','ss_school_create_class']);
+  if(!allowed.has(name))throw Error('Unsupported school operation');
+  if(!ready||!client||!live||!person||!profile||banned(profile))throw Error('Sign in to StudySpire Cloud first');
+  const {data,error}=await client.rpc(name,args);
+  if(error)throw Error(error.message);
+  return data;
+ }
+};
 window.StudySpireHostedAI={
  available:()=>Boolean(ready&&client&&live&&person&&profile&&!banned(profile)),
  // Only the verified Cloud profile with this exact username may run diagnostics.
