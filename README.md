@@ -2,6 +2,30 @@
 
 **A distinct school-management version of StudySpire. No AWS.** The original `StudySpire` repo is not changed by work in this repo.
 
+## New: School classroom workspace (October 2026)
+
+Open **Organizations & Schools**, choose a school, and press **Open classroom** beside a class. This is separate from the regular StudySpire repo.
+
+- **Principals / platform Owners:** enroll or remove existing school teachers and students into each class. Classes themselves remain principal/Owner-created; teachers cannot create classes.
+- **Teachers assigned to a class:** post assignments (instructions, deadline, maximum score), publish class announcements, review student submissions, and give points-based grades with feedback.
+- **Students enrolled in a class:** read class updates and assignments, submit or revise written work before it is graded, see their own scores and teacher feedback, and export class due dates to their calendar.
+- **Grade overview:** teachers see class members' percentages across graded submissions only; students see their own. This is a basic class grade summary, not an official report card.
+- **Privacy:** student work is returned only to the enrolled student and authorized class teacher/school leadership. The browser never directly reads the private school tables. Organization admins are not automatically allowed into class gradebooks.
+- **Smart Planner:** the same personal, device-local Planner module is available in both repos with deadlines, spaced review, progress, and backups. Its contents are separate from official classroom assignments.
+
+Database setup for a new StudySpire1 project:
+
+1. Install the original StudySpire schema and earlier migrations in their documented order.
+2. Apply studyspire1-organizations-schools.sql.
+3. Apply studyspire1-academics.sql.
+4. Verify the new tables have RLS enabled and no direct anon/authenticated table SELECT grants. The published classroom RPCs require a verified account and server-side class/school role checks.
+
+The classroom migration was applied to the currently connected Supabase project on October 29, 2026. **StudySpire and StudySpire1 still share that backend and Cloud logins**; use a dedicated Supabase project before storing production student records. No AWS is needed. Smoke test: run node --test tests/studyspire-planner.test.cjs.
+
+Parent portals, Google Classroom sync, district analytics, file attachments, and a formal cumulative gradebook are future work, not functioning features today.
+
+---
+
 ## New: owner-managed school networks
 
 The platform **Owner / Co-Owner** can create multiple organizations (districts, school networks), add schools to each, appoint and remove **organization administrators**, appoint **school principals**, and create classes. Organization administrators manage only the organizations they are appointed to, including school creation and appointing principals. Principals manage teachers/students in their assigned schools and can create classes. Teachers and students can see only the schools they belong to; teachers **cannot create classes**.
@@ -33,7 +57,7 @@ Permissions recap:
 
 **Deployment:** This remains a static website that can use GitHub Pages or Cloudflare Pages. No AWS, GPU, Ollama, or AWS Amplify configuration is needed. The original StudySpire Cloudflare AI and optional browser AI remain unchanged.
 
-**Current scope:** School administration, school memberships, scoped views, and class creation are implemented. A complete school gradebook, class enrollment, submissions, teacher grading, district analytics, and parent portals are **not yet connected to these school records**; don't treat this as a production school information system until those features and privacy/security testing are complete.
+**Current scope:** School management, school memberships, principal-created classes, class enrollment, assignments, written submissions, teacher grading, class announcements, and basic graded-work averages are implemented. Parent portals, formal transcripts, Google Classroom integration, and district-wide analytics are not yet connected. The school system needs live multi-user and privacy testing before production use.
 
 ---
 
