@@ -1,0 +1,149 @@
+/* StudySummit v3.80 — small independent UI layer. No existing themes are replaced. */
+#ssupTopActions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-left:auto}
+#ssupTopActions button,.ssup-sidebar-button,.ssup-ai-gpu{border:1px solid var(--line,#35445e);background:var(--surface2,#162238);color:var(--text,#f2f5ff);border-radius:9px;padding:8px 10px;cursor:pointer;font:600 12px/1.2 inherit;white-space:nowrap}
+#ssupTopActions button:hover,.ssup-sidebar-button:hover,.ssup-ai-gpu:hover{border-color:var(--purple,#8b86ff)}
+.ssup-sidebar-button{margin-left:auto;padding:7px!important;min-width:32px}
+@media(min-width:901px){
+ body.ssup-compact .app{grid-template-columns:75px minmax(0,1fr)!important}
+ body.ssup-compact .sidebar{padding:18px 7px!important;gap:18px!important}
+ body.ssup-compact .sidebar .brand{padding:0;justify-content:center;flex-wrap:wrap}
+ body.ssup-compact .sidebar .brandname,body.ssup-compact .sidebar .brandsub,
+ body.ssup-compact .sidebar .navlabel,body.ssup-compact .sidebar .sd-navtext,
+ body.ssup-compact .sidebar .sidebottom,body.ssup-compact .sidebar .nav button span:not(.navicon){display:none!important}
+ body.ssup-compact .sidebar .nav button{justify-content:center;padding:12px 4px;font-size:0;gap:0}
+ body.ssup-compact .sidebar .navicon{font-size:19px!important}
+ body.ssup-compact .ssup-sidebar-button{margin:auto}
+}
+#ssupShade[hidden],#ssupCommands[hidden],#ssupProgress[hidden],#ssupHealth[hidden]{display:none!important}
+#ssupShade,#ssupCommands{position:fixed;inset:0;z-index:100050;display:flex;justify-content:center;align-items:flex-start;overflow:auto;background:rgba(3,9,22,.83);padding:5vh 16px 35px;color:#e9f0ff}
+.ssup-dialog,.ssup-menu{background:#111e32;border:1px solid #394b6d;border-radius:17px;box-shadow:0 20px 70px #0009;width:min(900px,100%);padding:24px}
+.ssup-dialog button,.ssup-menu button{border:1px solid #596692;background:#263c65;color:#eef2ff;padding:10px 13px;border-radius:10px;font:600 13px/1.25 system-ui,sans-serif;cursor:pointer}
+.ssup-dialog button:hover,.ssup-menu button:hover{filter:brightness(1.15)}
+.ssup-head{display:flex;gap:18px;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.ssup-head h2{font-size:25px;margin:4px 0 6px;line-height:1.25}
+.ssup-head small{font-size:10px;font-weight:800;letter-spacing:1.4px;color:#9cabe5}
+.ssup-head p{margin:0;color:#b4c2dc;font-size:13px}
+#ssupClose{background:transparent;flex-shrink:0;min-width:34px}
+.ssup-tabs{display:flex;gap:9px;border-bottom:1px solid #344863;padding-bottom:12px;margin-bottom:18px}
+.ssup-tabs button[aria-pressed=true]{background:#6760bd;border-color:#9189ed}
+.ssup-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:13px}
+.ssup-metric{padding:14px;border:1px solid #344862;background:#15253d;border-radius:12px;min-width:0}
+.ssup-metric strong{display:block;font-size:24px;line-height:1.2;font-weight:820}
+.ssup-metric small{display:block;color:#a8b9d3;margin-top:5px;font-size:12px}
+.ssup-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ssup-card{min-width:0;background:#16253d;border:1px solid #344862;padding:17px;border-radius:12px;margin-bottom:12px;overflow-wrap:anywhere}
+.ssup-card h3{font-size:16px;margin:0 0 12px;color:#fff}
+.ssup-card p{color:#bdc9dd;font-size:13px;margin:8px 0}
+.ssup-card label{display:block;font-size:12px;font-weight:720;margin:9px 0 5px}
+.ssup-card select{background:#0e1a2d;color:white;border:1px solid #4b5c7a;border-radius:8px;padding:9px 10px;font:inherit;max-width:100%}
+.ssup-custom-duration[hidden]{display:none!important}
+.ssup-card .ssup-custom-duration input{
+ display:block;width:100%;max-width:155px;background:#0e1a2d;color:#fff;
+ border:1px solid #4b5c7a;border-radius:8px;padding:9px 10px;font:inherit;
+}
+.ssup-card .ssup-custom-duration input[aria-invalid="true"]{border-color:#f6a9b0}
+.ssup-card .ssup-custom-duration input:focus-visible{outline:2px solid #92bbff;outline-offset:2px}
+.ssup-muted{color:#9cabca!important;font-size:12px!important}
+.ssup-track{height:9px;background:#0b1525;border-radius:9px;overflow:hidden}
+.ssup-track span{display:block;height:100%;width:0;background:#9186ff;border-radius:inherit;transition:width .25s ease}
+.ssup-week{height:128px;display:flex;gap:9px;align-items:stretch;justify-content:space-between;margin:15px 0 5px}
+.ssup-day{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;gap:6px;min-width:0}
+.ssup-day span{display:block;background:linear-gradient(#b0a9ff,#665bdb);width:min(100%,28px);border-radius:6px 6px 2px 2px;min-height:6px}
+.ssup-day small{font-size:11px;color:#a2b4d2}
+.ssup-clock{font-size:42px;font-weight:850;letter-spacing:2px;font-variant-numeric:tabular-nums}
+.ssup-actions{display:flex;flex-wrap:wrap;gap:9px;margin:11px 0}
+.ssup-assignment{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #2e405d;font-size:13px}
+.ssup-assignment strong{font-weight:700;word-break:break-word}
+.ssup-assignment small{color:#a6b8d3;white-space:nowrap}
+#ssupDiagOutput{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b1422;border:1px solid #364964;border-radius:9px;padding:13px;color:#bdd0f5;line-height:1.6;max-height:360px;overflow:auto;font:12px/1.65 ui-monospace,SFMono-Regular,monospace}
+.ssup-menu{width:min(540px,100%);padding:19px}
+.ssup-menu label{display:block;font-size:12px;font-weight:800;margin-bottom:10px}
+.ssup-menu input{width:100%;background:#0c182b;border:1px solid #495b7a;color:white;padding:13px;border-radius:10px;font:14px system-ui,sans-serif}
+.ssup-menu small{display:block;color:#afbdd7;margin-top:12px}
+#ssupResults{display:grid;gap:6px;margin-top:12px;max-height:360px;overflow:auto}
+#ssupResults .ssup-result{width:100%;text-align:left;background:#1a2d49;border-color:#304764}
+#ssupAdvancedAI{border:1px solid #344e72;background:#132039;padding:12px;border-radius:11px;margin:12px 0}
+#ssupAdvancedAI summary{cursor:pointer;font-weight:750;font-size:12px}
+#ssupAdvancedAI .fieldgroup{margin:12px 0 0}
+#ssupModelProgress{display:block;width:100%;height:8px;accent-color:#8b86ff;margin:9px 0}
+#ssupModelProgress[hidden]{display:none!important}
+@media(max-width:700px){
+ #ssupShade,#ssupCommands{padding:12px 8px 25px}
+ .ssup-dialog,.ssup-menu{padding:17px}
+ .ssup-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .ssup-grid{grid-template-columns:1fr}
+ .ssup-head h2{font-size:21px}
+ .ssup-clock{font-size:36px}
+ #ssupTopActions button{font-size:11px;padding:7px}
+ .ssup-sidebar-button{display:none}
+}
+@media(prefers-reduced-motion:reduce){.ssup-track span{transition:none!important}}
+
+
+/* StudySpire README help: one compact top-right button + accessible guide modal. */
+#ssHelpTopButton.ss-help-trigger{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  flex:none;min-height:35px;padding:7px 10px;border:1px solid #384c70;
+  border-radius:10px;background:#15233a;color:#e4edff;white-space:nowrap;
+  font:650 12px/1.1 system-ui,sans-serif;cursor:pointer;
+}
+#ssHelpTopButton .ss-help-mark{
+  display:inline-grid;place-items:center;width:18px;height:18px;
+  border-radius:50%;background:#3b65ae;color:white;font-size:12px;font-weight:800;
+}
+#ssHelpTopButton:hover{background:#1b3052;border-color:#8cacfa}
+#ssHelpTopButton:focus-visible,#ssHelpOverlay button:focus-visible,
+#ssHelpOverlay a:focus-visible{outline:2px solid #9bb9ff;outline-offset:3px}
+#ssHelpTopButton[aria-expanded="true"]{border-color:#91b6fa;background:#20365d}
+#ssHelpOverlay[hidden]{display:none!important}
+#ssHelpOverlay{
+  position:fixed;inset:0;z-index:100200;display:flex;
+  align-items:center;justify-content:center;overflow:auto;
+  background:rgba(4,10,23,.78);padding:18px;
+}
+.ss-help-dialog{
+  display:flex;flex-direction:column;width:min(720px,100%);max-height:min(92dvh,920px);
+  overflow:hidden;border-radius:17px;border:1px solid #3e5070;
+  background:#111e33;color:#e8f1ff;
+  box-shadow:0 18px 60px #0008;
+}
+.ss-help-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+  padding:20px 24px 17px;border-bottom:1px solid #32445f;
+}
+.ss-help-head h2{margin:6px 0 5px;font:800 clamp(20px,3vw,25px)/1.25 system-ui,sans-serif;color:#f5f8ff}
+.ss-help-head p{margin:0;color:#a8b9d8;font-size:12px}
+.ss-help-eyebrow{color:#95baff;font-size:10px;font-weight:850;letter-spacing:1.4px}
+#ssHelpClose{
+  display:grid;place-items:center;flex:none;width:36px;height:36px;
+  border:1px solid #42516c;border-radius:10px;background:#1b2c48;
+  color:#f1f5ff;cursor:pointer;font-size:17px;
+}
+#ssHelpClose:hover{background:#29446c}
+.ss-help-body{
+  min-height:0;overflow-y:auto;padding:22px 26px;overscroll-behavior:contain;
+  font:400 14px/1.65 system-ui,sans-serif;scrollbar-width:thin;
+}
+.ss-help-body h3{color:#c1d7ff;margin:23px 0 9px;font:750 16px/1.35 system-ui,sans-serif}
+.ss-help-body h3:first-child{margin-top:0}
+.ss-help-body p{margin:0 0 13px;color:#dae4f5}
+.ss-help-body ul,.ss-help-body ol{padding-left:24px;margin:7px 0 18px}
+.ss-help-body li{margin:7px 0;max-width:65ch;overflow-wrap:anywhere}
+.ss-help-body li::marker{color:#86b2ff}
+.ss-help-body strong{font-weight:750;color:#fff}
+.ss-help-footer{
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+  padding:14px 24px;border-top:1px solid #32445f;font-size:12px;color:#9fb0c9;
+}
+.ss-help-footer a{color:#a6c8ff;font-weight:700;text-decoration:none}
+.ss-help-footer a:hover{text-decoration:underline}
+@media(max-width:720px){
+  #ssHelpTopButton{min-width:35px;padding:7px!important}
+  #ssHelpTopButton .ss-help-label{display:none}
+  #ssHelpOverlay{padding:8px}
+  .ss-help-dialog{max-height:calc(100dvh - 16px);border-radius:13px}
+  .ss-help-head{padding:16px 17px 12px}
+  .ss-help-body{padding:15px 19px;font-size:13px}
+  .ss-help-footer{padding:12px 17px}
+}
+@media(prefers-reduced-motion:reduce){#ssHelpTopButton{transition:none!important}}
