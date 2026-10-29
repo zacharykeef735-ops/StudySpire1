@@ -461,12 +461,6 @@ window.StudySpireHostedAI={
  },
  ask:async(messages,maxTokens,onChunk)=>{
   if(!window.StudySpireHostedAI.available())throw Error('Sign in to StudySpire Cloud first.');
-  if(window.StudySpireAWSAI?.enabled()){
-    const {data:session,error:sessionError}=await client.auth.getSession();
-    const token=session?.session?.access_token;
-    if(sessionError||!token)throw Error('StudySpire Cloud session expired. Sign in again.');
-    return await window.StudySpireAWSAI.ask(messages,maxTokens,onChunk,token);
-  }
   // Direct Worker access removes a Supabase Edge Function hop and a per-request
   // Worker health probe. The Worker independently verifies JWT and reserves quota.
   const workerRoot=String(window.STUDY_SUMMIT_CLOUD?.guideWorkerUrl||'').trim().replace(/\\/g,'').replace(/\/$/,'');
