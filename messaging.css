@@ -1,0 +1,44 @@
+/* Cloud messaging v3.82 — private friend requests and conversations. */
+.sd-suite-pane[data-pane="friends"] .sd-feature-head{align-items:center;flex-wrap:wrap;gap:12px}
+.sd-suite-pane[data-pane="friends"] .sd-feature-head p{max-width:680px}
+.sd-suite-pane[data-pane="friends"] #sdRefreshMessages{margin-left:auto;white-space:nowrap}
+.sd-suite-pane[data-pane="friends"] .sd-suite-grid{align-items:start}
+.sd-suite-pane[data-pane="friends"] #sdFriendResults,
+.sd-suite-pane[data-pane="friends"] #sdFriendRequests,
+.sd-suite-pane[data-pane="friends"] #sdOutgoingRequests,
+.sd-suite-pane[data-pane="friends"] #sdFriendsList,
+.sd-suite-pane[data-pane="friends"] #sdBlockedUsers,
+.sd-suite-pane[data-pane="friends"] #sdSharedDeckInbox{display:grid;gap:8px;margin:10px 0 16px}
+.sd-suite-pane[data-pane="friends"] .sd-social-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+ padding:12px 13px;background:var(--surface2,#172138);border:1px solid var(--line,#33425d);border-radius:11px;min-width:0}
+.sd-suite-pane[data-pane="friends"] .sd-social-row strong,
+.sd-suite-pane[data-pane="friends"] .sd-social-row span{overflow-wrap:anywhere}
+.sd-suite-pane[data-pane="friends"] .sd-social-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sd-suite-pane[data-pane="friends"] .sd-social-text small{font-size:11px;color:var(--muted,#a9b5c9)}
+.sd-suite-pane[data-pane="friends"] .sd-social-actions{display:flex;flex-wrap:wrap;gap:6px}
+.sd-suite-pane[data-pane="friends"] .sd-social-actions button{white-space:nowrap;padding:7px 9px;font-size:11px}
+.sd-suite-pane[data-pane="friends"] .sd-social-empty{margin:8px 0;color:var(--muted,#a9b5c9);font-size:12px}
+.sd-suite-pane[data-pane="friends"] #sdMessageThread{min-height:210px;max-height:440px;overflow-y:auto;overscroll-behavior:contain;
+ background:var(--surface,#121c2e);scrollbar-width:thin}
+.sd-suite-pane[data-pane="friends"] .sd-message-bubble{max-width:min(88%,520px);padding:12px 14px;box-shadow:0 2px 8px #0001}
+.sd-suite-pane[data-pane="friends"] .sd-message-bubble.mine{background:linear-gradient(135deg,#484d91,#6252a5)}
+.sd-suite-pane[data-pane="friends"] .sd-social-message-body{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.55;user-select:text}
+.sd-suite-pane[data-pane="friends"] .ss-msg-report{margin:8px 0 0;background:transparent;color:var(--muted,#b7c7dc);
+ border:0;text-decoration:underline;font-size:11px;padding:3px;cursor:pointer}
+.sd-suite-pane[data-pane="friends"] .ss-msg-report:hover{color:#f4ceae}
+.sd-suite-pane[data-pane="friends"] #sdFriendMessage{width:100%;box-sizing:border-box;resize:vertical;min-height:82px;margin:8px 0 10px}
+.sd-suite-pane[data-pane="friends"] #sdFriendStatus{min-height:18px;line-height:1.5;margin:12px 0}
+.sd-suite-pane[data-pane="friends"] #sdFriendStatus[data-tone="error"]{color:#ffacb5}
+.sd-suite-pane[data-pane="friends"] #sdFriendStatus[data-tone="good"]{color:#9ee4b6}
+.sd-suite-pane[data-pane="friends"] .cardtitle{font-size:15px}
+.sd-suite-pane[data-pane="friends"] .sd-notice{line-height:1.6}
+.sd-suite-pane[data-pane="friends"] button:focus-visible,
+.sd-suite-pane[data-pane="friends"] input:focus-visible,
+.sd-suite-pane[data-pane="friends"] select:focus-visible,
+.sd-suite-pane[data-pane="friends"] textarea:focus-visible{outline:2px solid #9892ff;outline-offset:2px}
+@media(max-width:800px){
+ .sd-suite-pane[data-pane="friends"] .sd-social-row{align-items:flex-start;flex-direction:column}
+ .sd-suite-pane[data-pane="friends"] .sd-social-actions{width:100%}
+ .sd-suite-pane[data-pane="friends"] .sd-message-bubble{max-width:96%}
+ .sd-suite-pane[data-pane="friends"] #sdMessageThread{max-height:350px}
+}
