@@ -188,6 +188,7 @@ function renderSchool(host,org,school){
  for(const course of school.classes||[]){
   const line=el('div',null,'ss-sm-line');
   line.append(el('strong',course.title),el('small',course.subject||'General'));
+  line.append(action('Open classroom',()=>window.StudySpireClassroom?.open(course.id,course.title),'ss-sm-btn'));
   classes.append(line);
  }
  if(!(school.classes||[]).length)classes.append(el('p','No classes created yet.','ss-sm-muted'));
