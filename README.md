@@ -505,35 +505,3 @@ The repo's `wrangler.toml` targets the already-public `studyspire` Worker at `ht
 Once deployed, open `https://studyspire.zacharykeef735.workers.dev/health`. It must report `"version":2` and `"aiBound":true`. The `zk5142`-only connection test should report `AI_BINDING_READY`; then test a personalized question to confirm inference. If the Worker is still on version 1 or `aiBound` is false, **real AI generation is not yet available** via the binding.
 
 The Worker validates the student's Supabase Auth session and atomically reserves a quota against the server-verified profile via `ss_ai_claim_mine` (60 questions per student, 400 site-wide per UTC day). Other users cannot claim on behalf of someone else's username, and the provider's actual neuron allowance may run out sooner. Public reviewed guides still use zero AI neurons and never receive student questions; generated tutor prompts are sent to Cloudflare Workers AI. An eligible operator must review applicable service terms and student-data requirements. The legacy Cloudflare REST API route is retained only as an alternative.
-
-
----
-
-## StudySpire1: optional self-hosted AWS AI
-
-This repository is a **separate copy** of the StudySpire app with optional AWS AI integration. The original `StudySpire` repository was not changed.
-
-- The normal AI tutoring, browser WebGPU fallback, and Cloudflare AI are still available.
-- AWS AI is OFF by default. To turn it on after provisioning the backend, open **Settings → AI & Mini → AWS AI**.
-- AWS Amplify hosts the static StudySpire frontend. **Amplify does not run Ollama inference.** An EC2 instance runs the Python gateway and private Ollama server.
-- No external AI-provider API key is needed, but AWS compute, storage, network, and GPU usage may cost money.
-- Existing Supabase authentication/profile validation and quota RPCs protect the gateway. Verify these RPCs and RLS before use with student data.
-- Uploaded images are **not** supported by the text-only AWS model.
-- Do not put secret keys in the frontend, `aws-ai-config.js`, Amplify public variables, or GitHub.
-
-### AWS deployment
-
-1. Connect **only this StudySpire1 repository** to a new AWS Amplify app. The included `amplify.yml` publishes static HTML/JS/CSS/SVG into `dist`. It does not run inference.
-2. Launch a suitable Amazon EC2 instance under an authorized AWS account administrator with billing alerts. Deploy Ollama with model `qwen2.5:3b` or another compatible model. Keep port **11434 bound to 127.0.0.1** and do not expose it publicly.
-3. Create an isolated Python virtual environment on EC2 and install `aws-ai-server/requirements.txt`. Configure `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `ALLOWED_ORIGINS`, `OLLAMA_URL` and model name in a **private server-side environment file** based on `aws-ai-server/.env.example`.
-4. Run the included FastAPI gateway bound to **127.0.0.1:8000** and use Caddy or another reverse proxy for **HTTPS** on a domain you control. Public firewall access should only expose intended web ports (80/443); keep Ollama and FastAPI ports private.
-5. Set the Amplify environment variable `STUDYSPIRE_AWS_AI_URL` to the public **HTTPS origin** of the gateway, e.g. `https://ai.yourdomain.example` (not a secret). Redeploy Amplify.
-6. Update the gateway's `ALLOWED_ORIGINS` to your actual Amplify URL, without a trailing slash. This must match the browser's Origin header exactly.
-7. Sign in to StudySpire Cloud. On **Settings → AI & Mini**, select AWS AI. Test with a fictional question and verify streamed tutoring. Turn the preference off to return to the existing Cloudflare/browser flow.
-8. Update Supabase **Authentication → URL Configuration** with the new Amplify frontend URL as needed. Set up separate Supabase infrastructure if this clone should be independent of production data.
-
-**Testing and safety:** The AWS server has not been provisioned or live-tested. The server's quota accounting uses the existing `ss_ai_status` and `ss_ai_claim_mine` Supabase RPCs, so that database migration and appropriate RLS must already be applied. No real student data should be sent until access control, operational safeguards, retention, audit logging, and school privacy requirements have been reviewed. Avoid unlimited usage and check AWS charges regularly.
-
-### Repository boundaries
-
-`StudySpire1` is a completely separate code repository. **It does not create a separate Supabase project automatically**. The copied `cloud-config.js` still targets the existing project until changed, so accounts and records can be shared across the two websites.
