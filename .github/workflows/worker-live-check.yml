@@ -1,0 +1,63 @@
+name: Verify live Cloudflare Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/worker-live-check.yml'
+      - 'cloudflare/**'
+      - 'wrangler.toml'
+      - 'cloud-config.js'
+      - 'studyspire-guide.js'
+      - 'studyspire-guide-catalog.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Test deployed StudySpire and its actual Cloudflare Worker
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          const site='https://zacharykeef735-ops.github.io/StudySpire/';
+          async function get(url,opts={}){
+            const res=await fetch(url,{signal:AbortSignal.timeout(12000),...opts});
+            const body=await res.text();
+            console.log(JSON.stringify({url,status:res.status,contentType:res.headers.get('content-type'),bytes:body.length,body:res.status===200?null:body.slice(0,200)}));
+            if(!res.ok)throw Error('Bad response '+res.status+' for '+url);
+            return {res,body};
+          }
+          const {body:html}=await get(site);
+          if(!html.includes('studyspire-guide.js?v=1.00'))throw Error('Deployed StudySpire page missing study guide script');
+          const {body:config}=await get(site+'cloud-config.js');
+          const workerUrl=config.match(/guideWorkerUrl:\s*'(https:\/\/[^']+)'/)?.[1];
+          if(!workerUrl)throw Error('Deployed site has no configured Worker URL');
+          const {body:client}=await get(site+'studyspire-guide.js?v=1.00');
+          const {body:catalog}=await get(site+'studyspire-guide-catalog.mjs');
+          if(!client.includes("url.searchParams.set('topic',topic)")||!catalog.includes('photosynthesis'))throw Error('Browser guide modules not deployed correctly');
+          const origin=new URL(site).origin;
+          const {res:healthResponse,body:healthBody}=await get(workerUrl+'/health',{headers:{Origin:origin}});
+          const health=JSON.parse(healthBody);
+          if(health.ok!==true||health.service!=='studyspire-guides'||health.aiNeurons!==0)throw Error('Worker health response invalid');
+          console.log('WORKERS_AI_BINDING_STATUS: '+JSON.stringify({workerVersion:health.version,aiBound:health.aiBound===true}));
+          if(health.version!==2||health.aiBound!==true)throw Error('The deployed Cloudflare Worker does not expose version 2 with an active AI binding');
+          const noAuth=await fetch(workerUrl+'/v1/tutor',{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Origin':origin},
+            body:JSON.stringify({messages:[{role:'user',content:'Explain slope'}]}),
+            signal:AbortSignal.timeout(12000)
+          });
+          const unauth=await noAuth.json();
+          console.log('WORKERS_AI_AUTH_GUARD: '+JSON.stringify({status:noAuth.status,code:unauth.code}));
+          if(noAuth.status!==401||unauth.code!=='SIGN_IN')throw Error('AI binding endpoint does not enforce Cloud sign-in');
+          if(healthResponse.headers.get('access-control-allow-origin')!=='*')throw Error('Worker CORS prevents the site from reading guides');
+          const {body:guideBody}=await get(workerUrl+'/v1/guide?topic=photosynthesis',{headers:{Origin:origin}});
+          const guide=JSON.parse(guideBody);
+          if(guide.topic!=='photosynthesis'||guide.source!=='studyspire-reviewed-guide'||!guide.guide?.question||guide.aiNeurons!==0)throw Error('Worker guide response invalid');
+          console.log('SUCCESS: deployed StudySpire site + configured public Worker + study guide endpoint + CORS, all verified using live HTTP responses');
+          JS
