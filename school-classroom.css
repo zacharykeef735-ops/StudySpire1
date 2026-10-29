@@ -1,0 +1,25 @@
+/* School-only classroom UI. Keep the personal StudySpire design independent. */
+#sscRoot[hidden],#sscRoot [hidden]{display:none!important}
+.ssc-overlay{position:fixed;inset:0;z-index:22000;padding:12px;background:rgba(3,10,23,.86);display:grid;place-items:center;color:#ecf5ff}
+.ssc-panel{width:min(1200px,100%);box-sizing:border-box;max-height:95vh;overflow:auto;background:#0c1b31;border:1px solid #365579;border-radius:18px;padding:18px;box-shadow:0 24px 70px #0009;font:14px/1.45 system-ui,Segoe UI,sans-serif}
+.ssc-panel header{display:flex;justify-content:space-between;align-items:start;gap:16px}.ssc-panel header small{font-weight:800;letter-spacing:.12em;color:#85bcff}
+.ssc-panel header h2{margin:2px 0;font-size:24px}.ssc-panel header p{margin:0;color:#aec7e5}.ssc-actions{display:flex;gap:8px;flex-wrap:wrap}
+.ssc-btn{border:1px solid #4e719d;border-radius:8px;background:#1b3858;color:#e6f3ff;padding:8px 12px;cursor:pointer}
+.ssc-btn.primary{border-color:transparent;background:#216fc4}.ssc-btn.danger{border-color:#9d5068;color:#ffd4dd;background:#452333}.ssc-btn:hover{filter:brightness(1.13)}
+.ssc-btn:focus-visible,.ssc-panel input:focus,.ssc-panel textarea:focus,.ssc-panel select:focus{outline:2px solid #79b4ff;outline-offset:2px}
+.ssc-busy .ssc-btn{opacity:.65;pointer-events:none}.ssc-notice{padding:10px;background:#17385c;border-radius:8px;margin:12px 0}
+.ssc-meta{display:flex;gap:8px;margin:14px 0}.ssc-pill{padding:5px 9px;border:1px solid #41658e;border-radius:20px;color:#b7d5f7;font-size:12px}
+.ssc-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px}.ssc-column{display:grid;align-content:start;gap:14px;min-width:0}
+.ssc-card{border:1px solid #345172;border-radius:12px;background:#112944;padding:14px;min-width:0}.ssc-card h3{font-size:17px;margin:0 0 12px}.ssc-card h4{margin:10px 0 7px;font-size:14px}
+.ssc-line{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border-bottom:1px solid #33516f;padding:9px 0}.ssc-line:last-child{border-bottom:0}
+.ssc-line h3{margin:0}.ssc-line small,.ssc-muted{color:#a1bad7}
+.ssc-form{display:grid;gap:8px;border:1px solid #345a7d;border-radius:10px;background:#102138;padding:12px;margin:12px 0}
+.ssc-field{display:grid;gap:5px;font-size:12px;font-weight:700;color:#c4d8f4}.ssc-field input,.ssc-field select,.ssc-field textarea{width:100%;box-sizing:border-box;border:1px solid #476586;border-radius:7px;background:#1c3654;color:white;padding:9px;font:14px system-ui,sans-serif}
+.ssc-field textarea{min-height:78px;resize:vertical}.ssc-form>.ssc-btn{justify-self:start}
+.ssc-assignment{border:1px solid #3b5878;background:#162f4b;border-radius:12px;padding:12px;margin:12px 0;overflow-wrap:anywhere}
+.ssc-assignment-head{display:flex;justify-content:space-between;align-items:start;gap:9px;flex-wrap:wrap}.ssc-assignment-head h4{margin:0;font-size:16px}
+.ssc-assignment-head small{color:#a7c5e3}.ssc-description,.ssc-submission p,.ssc-post p{white-space:pre-wrap;overflow-wrap:anywhere}
+.ssc-submission{padding:12px;margin:10px 0;background:#10243d;border:1px solid #426184;border-radius:9px}
+.ssc-submission>small{display:block;color:#a4c0de}.ssc-feedback{background:#153c54;padding:10px;border-radius:8px}
+.ssc-post{border-bottom:1px solid #34516d;padding:10px 0}.ssc-post:last-child{border:0}.ssc-post p{margin:4px 0}.ssc-post small{color:#a2bedc}
+@media(max-width:760px){.ssc-grid{grid-template-columns:1fr}.ssc-panel{padding:12px;max-height:97vh}.ssc-panel header h2{font-size:20px}}
