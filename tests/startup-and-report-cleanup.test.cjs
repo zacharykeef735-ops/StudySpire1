@@ -28,8 +28,10 @@ test('first paint shows loading shell until the new dashboard is complete',()=>{
 });
 
 test('cloud staff report review removes the item only after successful RPC',()=>{
- assert.match(cloud,/await rpc\('ss_review_report',\{report_id:r\.id\}\);await renderStaff\(\);staffMsg\('Report reviewed and automatically deleted/);
- assert.match(cloud,/review\.disabled=true/);
+ assert.match(cloud,/else await rpc\('ss_resolve_report',\{report_id:report\.id,decision\}\)/);
+ assert.match(cloud,/shade\.remove\(\);\s*await renderStaff\(\);/);
+ assert.match(cloud,/Report archived/);
+ assert.match(cloud,/actions\.querySelectorAll\('button'\)\.forEach\(b=>b\.disabled=true\)/);
  assert.match(cloud,/No open reports\./);
  assert.doesNotMatch(cloud,/<option value="reviewed">Reviewed reports<\/option>/);
  assert.match(cloud,/ss_staff_audit/);

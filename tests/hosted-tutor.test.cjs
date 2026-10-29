@@ -16,7 +16,7 @@ test('hosted AI starts first for signed-in users and has browser fallback',()=>{
  assert.match(html,/StudySpireTutorLastProvider='Browser tutor'/);
  assert.match(html,/state\.lastProvider=window\.StudySpireTutorLastProvider/);
  assert.match(html,/id="ssHostedTutorQuota"/);
- assert.match(html,/cloud\.js\?v=4\.06/);
+ assert.match(html,/cloud\.js\?v=4\.14/);
  assert.doesNotMatch(html,/CLOUDFLARE_AI_TOKEN|SUPABASE_SERVICE_ROLE_KEY/);
 });
 
@@ -70,39 +70,45 @@ test('Cloudflare diagnostics disclose no credentials and do not consume question
  assert.doesNotMatch(html,/api\.cloudflare\.com\/client\/v4/);
 });
 
-test('Tutor displays a permanent connection test beside Explain and guide me',async()=>{
+test('Tutor quick check is visible when signed in, and owner diagnostics are restricted',async()=>{
  const vm=require('node:vm');
- assert.match(html,/id="askBtn"[^>]*>✦ Explain and guide me<\/button>[\s\S]{0,350}id="ssTutorQuickConnectionTest"/);
+ assert.match(html,/id="askBtn"[^>]*>✦ Explain and guide me<\/button>[\s\S]{0,450}id="ssTutorQuickConnectionTest"/);
  assert.match(html,/id="ssTutorQuickConnectionStatus" role="status"/);
  const block=html.match(/<script id="ss-tutor-connection-test">([\s\S]*?)<\/script>/)?.[1];
- assert.ok(block,'Missing independent Tutor connection test script');
- const button={hidden:true,disabled:false,addEventListener(event,callback){this[event]=callback;}};
- const settings={hidden:true};
- const output={className:'',textContent:''};
- const page={getElementById:id=>id==='ssTutorQuickConnectionTest'?button:id==='ssTutorQuickConnectionStatus'?output:id==='ssHostedTutorTest'?settings:null};
+ assert.ok(block,'Missing connection test script');
+ const control=()=>({hidden:false,disabled:false,addEventListener(event,handler){this[event]=handler}});
+ const quick=control(),owner=control(),settings={hidden:false},output={className:'',textContent:''};
+ const items={ssTutorQuickConnectionTest:quick,ssTutorOwnerConnectionTest:owner,ssTutorQuickConnectionStatus:output,ssHostedTutorTest:settings};
  const handlers={};
- const win={addEventListener(name,callback){handlers[name]=callback;},StudySpireHostedAI:{canDiagnose:()=>false,available:()=>true,diagnose:async()=>({ok:true,ready:false,code:'ACCOUNT_ID_INVALID',message:'Account ID needs checking.'})}};
- vm.runInNewContext(block,{document:page,window:win});
- assert.equal(typeof button.click,'function');
- assert.equal(button.hidden,true);
- assert.equal(settings.hidden,true);
- await button.click();
- assert.equal(output.textContent,'');
- win.StudySpireHostedAI.canDiagnose=()=>true;
+ const service={available:()=>false,canDiagnose:()=>false,
+  quota:async()=>({daily_limit:60,used:2,site_limit:400,site_used:10}),
+  diagnose:async()=>({ready:false,message:'Account ID needs checking.'})};
+ const win={addEventListener(name,handler){handlers[name]=handler},StudySpireHostedAI:service};
+ vm.runInNewContext(block,{document:{getElementById:id=>items[id]||null},window:win,Date});
+ assert.equal(quick.hidden,true);
+ assert.equal(owner.hidden,true);
+ service.available=()=>true;
  handlers['ss-cloud-auth-changed']();
- assert.equal(button.hidden,false);
+ assert.equal(quick.hidden,false);
+ assert.equal(owner.hidden,true);
+ await quick.click();
+ assert.match(output.textContent,/58 of 60 questions left today/);
+ assert.equal(output.className,'status show good');
+ service.canDiagnose=()=>true;
+ handlers['ss-cloud-auth-changed']();
+ assert.equal(owner.hidden,false);
  assert.equal(settings.hidden,false);
- await button.click();
- assert.equal(button.disabled,false);
+ await owner.click();
  assert.match(output.textContent,/Account ID needs checking/);
  assert.equal(output.className,'status show bad');
- win.StudySpireHostedAI.diagnose=async()=>({ok:true,ready:true,code:'TOKEN_ACTIVE',message:'Token is active.'});
- await button.click();
- assert.match(output.textContent,/Token is active/);
+ service.diagnose=async()=>({ready:true,message:'Token active'});
+ await owner.click();
+ assert.match(output.textContent,/Token active/);
  assert.equal(output.className,'status show good');
- win.StudySpireHostedAI.canDiagnose=()=>false;
+ service.available=()=>false;service.canDiagnose=()=>false;
  handlers['ss-cloud-auth-changed']();
- assert.equal(button.hidden,true);
+ assert.equal(quick.hidden,true);
+ assert.equal(owner.hidden,true);
  assert.equal(settings.hidden,true);
  assert.equal(output.textContent,'');
 });
@@ -113,7 +119,7 @@ test('diagnostic requires verified zk5142 account in backend and UI',()=>{
  assert.match(server,/fail\(403,"FORBIDDEN"/);
  assert.ok(server.indexOf('rows[0]?.username')<server.indexOf('if(!cfToken)return respond'));
  assert.match(html,/#ssTutorQuickConnectionTest\[hidden\],#ssHostedTutorTest\[hidden\]/);
- assert.match(html,/id="ssTutorQuickConnectionTest"[^>]*hidden/);
+ assert.match(html,/id="ssTutorOwnerConnectionTest"[^>]*hidden/);
  assert.match(html,/id="ssHostedTutorTest"[^>]*hidden/);
 });
 

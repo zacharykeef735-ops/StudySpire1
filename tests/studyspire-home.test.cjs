@@ -15,7 +15,7 @@ test('StudySpire branding and Academic AI appear on the actual site',()=>{
   assert.match(html,/href="studyspire-home\.css\?v=3\.90"/);
   assert.match(html,/src="studyspire-home\.js\?v=3\.94"/);
   assert.match(html,/src="help-guide\.js\?v=3\.94"/);
-  assert.match(html,/src="messaging\.js\?v=3\.92"/);
+  assert.match(html,/src="messaging\.js\?v=3\.95"/);
   assert.match(html,/ACADEMIC AI/);
   assert.doesNotMatch(html,/src="data:image\/webp;base64,/);
   assert.match(logo,/<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
@@ -25,8 +25,8 @@ test('StudySpire branding and Academic AI appear on the actual site',()=>{
 
 test('home scripts load after existing features and tool navigation is complete',()=>{
   assert.doesNotThrow(()=>new Function(js));
-  const scripts=['suite.js?v=3.80','cloud.js?v=4.06','enhancements.js?v=3.81',
-    'messaging.js?v=3.92','help-guide.js?v=3.94','studyspire-home.js?v=3.94'];
+  const scripts=['suite.js?v=3.80','cloud.js?v=4.14','enhancements.js?v=3.81',
+    'messaging.js?v=3.95','help-guide.js?v=3.94','studyspire-home.js?v=3.94'];
   const positions=scripts.map(s=>html.indexOf('src="'+s+'"'));
   assert.ok(positions.every(p=>p>0));
   assert.deepEqual([...positions].sort((a,b)=>a-b),positions);

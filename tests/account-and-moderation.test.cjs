@@ -18,7 +18,7 @@ test('role titles are loaded from read-only verified public RPCs',()=>{
   assert.match(accountSql,/select pg_catalog\.jsonb_build_object\('username',p\.username,'role',p\.role,'bio',p\.bio\)/);
   assert.match(accountSql,/grant execute on function public\.ss_public_profile\(text\),public\.ss_public_titles\(text\[\]\)\s+to anon,authenticated/);
   assert.match(cloud,/const PUBLIC_PROFILE_ALLOWED=new Set\(\['ss_public_profile','ss_public_titles'\]\)/);
-  assert.match(roles,/const staffRoles=new Set\(\['owner','admin','moderator'\]\)/);
+  assert.match(roles,/const staffRoles=new Set\(\['owner','co_owner','admin','moderator'\]\)/);
   assert.match(messages,/StudySpireRoles\?\.decorateLabel/);
   assert.match(avatars,/StudySpireRoles\?\.decorateLabel/);
 });
