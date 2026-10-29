@@ -16,7 +16,7 @@ test('hosted AI starts first for signed-in users and has browser fallback',()=>{
  assert.match(html,/StudySpireTutorLastProvider='Browser tutor'/);
  assert.match(html,/state\.lastProvider=window\.StudySpireTutorLastProvider/);
  assert.match(html,/id="ssHostedTutorQuota"/);
- assert.match(html,/cloud\.js\?v=4\.15/);
+ assert.match(html,/cloud\.js\?v=4\.16/);
  assert.doesNotMatch(html,/CLOUDFLARE_AI_TOKEN|SUPABASE_SERVICE_ROLE_KEY/);
 });
 
