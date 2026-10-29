@@ -442,7 +442,9 @@ window.StudySpireSchoolBridge={
  ready:()=>Boolean(ready&&client&&live&&person&&profile&&!banned(profile)),
  account:()=>live&&profile&&!banned(profile)?{username:profile.username,role:profile.role}:null,
  rpc:async(name,args={})=>{
-  const allowed=new Set(['ss_school_overview','ss_school_create_organization','ss_school_create_school','ss_school_set_admin','ss_school_set_member','ss_school_create_class']);
+  const allowed=new Set(['ss_school_overview','ss_school_create_organization','ss_school_create_school','ss_school_set_admin','ss_school_set_member','ss_school_create_class',
+   'ss_school_classroom','ss_school_class_enroll','ss_school_create_assignment',
+   'ss_school_submit_assignment','ss_school_grade_assignment','ss_school_post_announcement']);
   if(!allowed.has(name))throw Error('Unsupported school operation');
   if(!ready||!client||!live||!person||!profile||banned(profile))throw Error('Sign in to StudySpire Cloud first');
   const {data,error}=await client.rpc(name,args);
