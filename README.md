@@ -1,3 +1,42 @@
+# StudySpire1 — Organizations & Schools 🏫
+
+**A distinct school-management version of StudySpire. No AWS.** The original `StudySpire` repo is not changed by work in this repo.
+
+## New: owner-managed school networks
+
+The platform **Owner / Co-Owner** can create multiple organizations (districts, school networks), add schools to each, appoint and remove **organization administrators**, appoint **school principals**, and create classes. Organization administrators manage only the organizations they are appointed to, including school creation and appointing principals. Principals manage teachers/students in their assigned schools and can create classes. Teachers and students can see only the schools they belong to; teachers **cannot create classes**.
+
+School roles are **separate from platform roles**: appointing someone as an organization administrator does **not** promote them to platform Owner/Admin. Administrators and principals cannot manage another organization's schools or memberships. The permissions are checked by SQL functions on the server, not by the interface.
+
+### Open the new dashboard
+
+1. Open StudySpire1 and sign in to **StudySpire Cloud**.
+2. As an existing platform Owner / Co-Owner, select **🏫 Organizations & Schools** in the navigation, top bar, or dashboard quick actions.
+3. Create an **organization**, e.g. `Central School District`, code `central-district`.
+4. Under that organization, add a **school**, e.g. `Central High School`, code `central-high`.
+5. Under **Organization administrators**, enter an **existing StudySpire username** and appoint an administrator.
+6. Choose a school and enter an existing username to appoint a **principal**.
+7. The principal may enroll teachers/students and create class names from their own school view.
+
+Permissions recap:
+
+| Role | Create org | Create school | Appoint org admin | Appoint principal | Enroll teacher/student | Create class |
+|---|---|---|---|---|---|---|
+| Platform Owner / Co-Owner | Yes | Yes | Yes | Yes | Yes | Yes |
+| Organization admin | No | Own org only | No | Own org only | Own org schools | No |
+| School principal | No | No | No | No | Own school only | Own school only |
+| Teacher / student | No | No | No | No | No | No |
+
+**Database:** `studyspire1-organizations-schools.sql` creates the school tables, private roster, per-organization role assignments, and authenticated SQL RPCs. The migration is installed in the currently connected Supabase project. It creates only new `ss_organization*`, `ss_school*`, and `ss_schools` structures; it does not change the original account or moderation tables. The Owner dashboard will show a setup error if these functions are missing on another database.
+
+**Data isolation caveat:** `cloud-config.js` currently points to the **same Supabase project** as the original StudySpire website. StudySpire1's organizations are logically separated by role and school scope, **but logins and the backend are still shared between websites**. To have entirely independent users and student records, create a new Supabase project, run the original migrations in its documented order and then the StudySpire1 school migration, and change **only StudySpire1's** `cloud-config.js` public URL/publishable key. Never place service-role or secret keys in that file.
+
+**Deployment:** This remains a static website that can use GitHub Pages or Cloudflare Pages. No AWS, GPU, Ollama, or AWS Amplify configuration is needed. The original StudySpire Cloudflare AI and optional browser AI remain unchanged.
+
+**Current scope:** School administration, school memberships, scoped views, and class creation are implemented. A complete school gradebook, class enrollment, submissions, teacher grading, district analytics, and parent portals are **not yet connected to these school records**; don't treat this as a production school information system until those features and privacy/security testing are complete.
+
+---
+
 # StudySpire 📚
 
 **A browser-based study workspace with personal study tools, optional Supabase cloud accounts, role-based moderation, and an experimental on-device AI assistant.**
