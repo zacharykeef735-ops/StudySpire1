@@ -11,7 +11,7 @@ Open **Organizations & Schools**, choose a school, and press **Open classroom** 
 - **Students enrolled in a class:** read class updates and assignments, submit or revise written work before it is graded, see their own scores and teacher feedback, and export class due dates to their calendar.
 - **Grade overview:** teachers see class members' percentages across graded submissions only; students see their own. This is a basic class grade summary, not an official report card.
 - **Privacy:** student work is returned only to the enrolled student and authorized class teacher/school leadership. The browser never directly reads the private school tables. Organization admins are not automatically allowed into class gradebooks.
-- **Smart Planner:** the same personal, device-local Planner module is available in both repos with deadlines, spaced review, progress, and backups. Its contents are separate from official classroom assignments.
+- **Smart Planner:** the same personal, device-local Planner module is available in both repos with deadlines, spaced review, progress, and backups. Its contents are separate from official classroom assignments. Existing personal Assignments and flashcards can be imported as copies.
 
 Database setup for a new StudySpire1 project:
 

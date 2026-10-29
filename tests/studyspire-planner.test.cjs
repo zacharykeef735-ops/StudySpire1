@@ -20,6 +20,8 @@ test('planner backup, calendar, priority, and review operations exist',()=>{
  for(const marker of ['function exportCalendar(', 'function renderInsights(', 'function renderReview(', 'function rank(', 'function validate(', 'function renderBackup('])
  assert.ok(js.includes(marker),'Missing '+marker);
  assert.match(js,/\.slice\(0,500\)/);
+ assert.match(js,/function importExistingTasks\(/);
+ assert.match(js,/function importExistingCards\(/);
 });
 test('school classroom is installed only here, with guarded RPCs',()=>{
  const html=read('index.html');

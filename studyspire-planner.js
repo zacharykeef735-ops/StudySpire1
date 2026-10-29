@@ -25,6 +25,30 @@ function track(kind){db.history.push({date:iso(),kind});db.history=db.history.sl
 function notice(message){const n=$('sspNotice');if(n){n.hidden=!message;n.textContent=message||''}}
 function rank(task){const d=diff(task.due);return (task.priority==='high'?70:task.priority==='normal'?35:0)+(d<0?120:Math.max(0,90-d*13))-Math.min(25,task.minutes/10)}
 function pending(){return db.tasks.filter(t=>!t.done).sort((a,b)=>rank(b)-rank(a)||a.title.localeCompare(b.title))}
+function legacy(name){try{const k=typeof window.sdAccountKey==='function'?window.sdAccountKey(name):name;return JSON.parse(localStorage.getItem(k)||'{}')}catch{return {}}}
+function importExistingTasks(){
+ const suite=legacy('studydock-suite-v1'),lab=legacy('ss-study-lab-v374');
+ const sources=[...(Array.isArray(suite.tasks)?suite.tasks:[]),...(Array.isArray(lab.assignments)?lab.assignments:[])];
+ const seen=new Set(db.tasks.map(t=>(t.title+'|'+t.due).toLowerCase()));
+ let added=0;for(const raw of sources){
+  if(raw?.done||db.tasks.length>=500)continue;
+  const title=clean(raw?.name||raw?.title),due=/^\d{4}-\d\d-\d\d$/.test(raw?.due||'')?raw.due:'';
+  if(!title||seen.has((title+'|'+due).toLowerCase()))continue;
+  db.tasks.push({id:id(),title,subject:clean(raw.subject,60),due,priority:'normal',minutes:25,done:false});
+  seen.add((title+'|'+due).toLowerCase());added++;
+ }save();render();notice(added?'Imported '+added+' tasks. These are copies, not live links.':'No new tasks to import.');
+}
+function importExistingCards(){
+ const suite=legacy('studydock-suite-v1'),sources=Array.isArray(suite.cards)?suite.cards:[];
+ const seen=new Set(db.cards.map(c=>(c.question+'|'+c.answer).toLowerCase()));
+ let added=0;for(const raw of sources){
+  if(db.cards.length>=500)break;
+  const question=clean(raw?.front||raw?.question,240),answer=clean(raw?.back||raw?.answer,600);
+  if(!question||!answer||seen.has((question+'|'+answer).toLowerCase()))continue;
+  db.cards.push({id:id(),question,answer,subject:clean(raw.subject,60),due:iso(),interval:1});
+  seen.add((question+'|'+answer).toLowerCase());added++;
+ }save();render();notice(added?'Imported '+added+' flashcards for spaced review.':'No new flashcards to import.');
+}
 function download(name,content,type){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1200)}
 function open(target='plan'){load();shown=true;tab=target;$('sspOverlay').hidden=false;$('sspDialog').focus();render()}
 function close(){shown=false;$('sspOverlay').hidden=true}
@@ -116,13 +140,15 @@ function mount(){
  overlay.innerHTML='<section id="sspDialog" class="ssp-dialog" role="dialog" aria-modal="true" aria-labelledby="sspTitle" tabindex="-1">'+
  '<header><div><small>STUDYSPIRE · STUDY TOOLS</small><h2 id="sspTitle">Smart Study Planner</h2><p>Priority planning, review practice, and progress</p></div><button id="sspClose" type="button" class="ssp-close">✕ Close</button></header><p id="sspNotice" role="status" class="ssp-notice" hidden></p>'+
  '<nav class="ssp-tabs" role="tablist"><button data-ssp-tab="plan" role="tab">Plan</button><button data-ssp-tab="review" role="tab">Spaced review</button><button data-ssp-tab="insights" role="tab">Insights</button><button data-ssp-tab="backup" role="tab">Backup</button></nav>'+
- '<div id="ssp-plan"><form id="sspTaskForm" class="ssp-form"><label>Assignment or exam<input name="title" required maxlength="160" placeholder="Study for biology"></label><label>Subject<input name="subject" maxlength="60"></label><label>Due date<input name="due" type="date"></label><label>Minutes<input name="minutes" type="number" min="5" max="240" value="25"></label><label>Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select></label><button class="ssp-button primary" type="submit">Add task</button></form><div class="ssp-grid"><section><h3>Your tasks</h3><input id="sspSearch" aria-label="Search tasks" placeholder="Find a task…"><div id="sspTasks"></div></section><section><h3>Next study blocks</h3><p id="sspPlanSummary" class="ssp-muted"></p><div id="sspSchedule"></div></section></div></div>'+
- '<div id="ssp-review" hidden><form id="sspCardForm" class="ssp-form"><label>Question<input name="question" required maxlength="240" placeholder="What is photosynthesis?"></label><label>Answer<input name="answer" required maxlength="600"></label><label>Subject<input name="subject" maxlength="60"></label><button class="ssp-button primary" type="submit">Add review topic</button></form><h3 id="sspReviewCount"></h3><div id="sspReviewCurrent"></div><h3>Your topics</h3><div id="sspCards"></div></div>'+
+ '<div id="ssp-plan"><form id="sspTaskForm" class="ssp-form"><label>Assignment or exam<input name="title" required maxlength="160" placeholder="Study for biology"></label><label>Subject<input name="subject" maxlength="60"></label><label>Due date<input name="due" type="date"></label><label>Minutes<input name="minutes" type="number" min="5" max="240" value="25"></label><label>Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select></label><button class="ssp-button primary" type="submit">Add task</button></form><div class="ssp-actions"><button id="sspImportTasks" type="button" class="ssp-button">Import my existing Assignments &amp; tasks</button></div><div class="ssp-grid"><section><h3>Your tasks</h3><input id="sspSearch" aria-label="Search tasks" placeholder="Find a task…"><div id="sspTasks"></div></section><section><h3>Next study blocks</h3><p id="sspPlanSummary" class="ssp-muted"></p><div id="sspSchedule"></div></section></div></div>'+
+ '<div id="ssp-review" hidden><form id="sspCardForm" class="ssp-form"><label>Question<input name="question" required maxlength="240" placeholder="What is photosynthesis?"></label><label>Answer<input name="answer" required maxlength="600"></label><label>Subject<input name="subject" maxlength="60"></label><button class="ssp-button primary" type="submit">Add review topic</button></form><div class="ssp-actions"><button id="sspImportCards" type="button" class="ssp-button">Import my flashcards</button></div><h3 id="sspReviewCount"></h3><div id="sspReviewCurrent"></div><h3>Your topics</h3><div id="sspCards"></div></div>'+
  '<div id="ssp-insights" hidden><div id="sspInsights"></div></div><div id="ssp-backup" hidden><div id="sspBackup"></div></div></section>';
  document.body.append(overlay);$('sspClose').onclick=close;overlay.addEventListener('click',e=>{if(e.target===overlay)close()});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&shown)close()});
  overlay.querySelectorAll('[data-ssp-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.sspTab;notice('');render()});
  $('sspSearch').oninput=renderPlan;
+ $('sspImportTasks').onclick=importExistingTasks;
+ $('sspImportCards').onclick=importExistingCards;
  $('sspTaskForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget),title=clean(f.get('title'));if(!title)return;
   db.tasks.push({id:id(),title,subject:clean(f.get('subject'),60),due:clean(f.get('due'),10),priority:clean(f.get('priority')),minutes:num(f.get('minutes'),5,240,25),done:false});e.currentTarget.reset();save();notice('Task added.');render()};
  $('sspCardForm').onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget),question=clean(f.get('question'),240),answer=clean(f.get('answer'),600);if(!question||!answer)return;
