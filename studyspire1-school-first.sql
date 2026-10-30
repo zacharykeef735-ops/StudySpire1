@@ -253,7 +253,7 @@ begin
  if actor is null then raise exception 'Sign in to StudySpire Cloud first';end if;
  if p_role not in ('student','teacher') or p_role is null then raise exception 'Choose student or teacher';end if;
  if length(coalesce(p_note,''))>300 then raise exception 'Keep your application note under 300 characters';end if;
- select min(id),count(*) into sid,matches from public.ss_schools where code=lower(btrim(coalesce(p_code,'')));
+ select (select id from public.ss_schools where code=lower(btrim(coalesce(p_code,''))) order by created_at limit 1),count(*) into sid,matches from public.ss_schools where code=lower(btrim(coalesce(p_code,'')));
  if matches<>1 then raise exception 'School code not found or ambiguous';end if;
  if exists(select 1 from public.ss_school_memberships where school_id=sid and profile_id=actor) then raise exception 'Already a member of this school';end if;
  if exists(select 1 from public.ss_school_join_requests where school_id=sid and profile_id=actor and status='pending') then raise exception 'Already requested this school';end if;
@@ -301,7 +301,7 @@ begin
   insert into public.ss_school_memberships(school_id,profile_id,role,assigned_by)
   values(sid,target,requested,actor);
  end if;
- update public.ss_school_join_requests set status=case when p_approve then 'approved' else 'declined' end,
+ update public.ss_school_join_requests set status=case when p_approve then 'approved' else 'denied' end,
  reviewed_by=actor,reviewed_at=now() where id=p_request;
  insert into public.ss_school_audit(actor_id,school_id,action,detail)
  values(actor,sid,case when p_approve then 'school_join_approved' else 'school_join_declined' end,p_request::text);
@@ -491,4 +491,312 @@ grant execute on function public.ss1_create_school(text,text),
  public.ss1_record_attendance(uuid,text,date,text,text),public.ss1_verify_guardian(uuid,text,text,boolean),
  public.ss1_parent_portal(),public.ss1_school_analytics(uuid),public.ss1_school_audit(uuid),
  public.ss1_substitute_plan(uuid,text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Platform / school separation. These OVERRIDE legacy "Owner can see it all"
+-- assumptions. Staff cannot be school members, principals, admins, teachers,
+-- students or guardian accounts. Owner only creates/deletes schools or handles
+-- reports through the EXISTING platform moderation system.
+-- ---------------------------------------------------------------------------
+
+-- Suppress privileges that could bypass the new school-specific controls.
+-- Existing classroom teacher/principal APIs remain usable for actual school staff.
+revoke execute on function public.ss_school_create_organization(text,text) from public,anon,authenticated;
+revoke execute on function public.ss_school_create_school(uuid,text,text) from public,anon,authenticated;
+revoke execute on function public.ss_school_set_admin(uuid,text,boolean) from public,anon,authenticated;
+revoke execute on function public.ss_school_overview() from public,anon,authenticated;
+revoke execute on function public.ss_school_pending_join_requests(uuid) from public,anon,authenticated;
+revoke execute on function public.ss_school_review_join(uuid,boolean) from public,anon,authenticated;
+revoke execute on function public.ss_school_request_join(text,text,text,text) from public,anon,authenticated;
+revoke execute on function public.ss_school_set_member(uuid,text,text) from public,anon,authenticated;
+
+-- Central staff exclusion for ALL legacy school, class and enrollment functions.
+-- ss_current_profile_id supports StudySpire's username-only sessions.
+create or replace function public.ss_school_actor()
+returns uuid language sql stable security definer set search_path='' as $
+ select p.id from public.ss_profiles p
+ where p.id=(select public.ss_current_profile_id())
+   and p.role not in ('owner','co_owner','admin','moderator')
+   and (not p.banned or (p.banned_until is not null and p.banned_until<=now()))
+ limit 1
+$;
+-- The former cross-organization staff role is retired. It must not grant access
+-- just because someone was previously an organization administrator.
+create or replace function public.ss_school_org_admin(p_organization uuid)
+returns boolean language sql stable security definer set search_path='' as $
+ select false
+$;
+-- Former platform-owner bypass in classroom/gradebook RPCs is disabled.
+create or replace function public.ss_school_platform_owner()
+returns boolean language sql stable security definer set search_path='' as $
+ select false
+$;
+
+-- Platform lifecycle authority is strictly the verified active Owner (NOT
+-- Co-Owner, Admin, Moderator). This function is never granted to browser roles.
+create or replace function public.ss1_platform_owner_id()
+returns uuid language sql stable security definer set search_path='' as $
+ select p.id from public.ss_profiles p
+ where p.id=(select public.ss_current_profile_id()) and p.role='owner'
+   and (not p.banned or (p.banned_until is not null and p.banned_until<=now()))
+ limit 1
+$;
+
+-- Existing school leaders manage every day-to-day school staff role.
+-- No platform staff can be appointed, even by legacy functions.
+create or replace function public.ss1_reject_platform_staff()
+returns trigger language plpgsql security definer set search_path='' as $
+begin
+ if exists (select 1 from public.ss_profiles p where p.id=new.profile_id
+    and p.role in ('owner','co_owner','admin','moderator')) then
+   raise exception 'Platform staff cannot hold any school role';
+ end if;
+ return new;
+end $;
+drop trigger if exists ss1_platform_staff_school_membership on public.ss_school_memberships;
+create trigger ss1_platform_staff_school_membership before insert or update on public.ss_school_memberships
+for each row execute function public.ss1_reject_platform_staff();
+drop trigger if exists ss1_platform_staff_org_admin on public.ss_organization_admins;
+create trigger ss1_platform_staff_org_admin before insert or update on public.ss_organization_admins
+for each row execute function public.ss1_reject_platform_staff();
+drop trigger if exists ss1_platform_staff_class_enrollment on public.ss_school_class_enrollments;
+create trigger ss1_platform_staff_class_enrollment before insert or update on public.ss_school_class_enrollments
+for each row execute function public.ss1_reject_platform_staff();
+
+-- Staff promotions remove existing school affiliations. Schoolwork records are
+-- preserved for school leaders to audit but access to them is withdrawn.
+create or replace function public.ss1_remove_promoted_staff_school_access()
+returns trigger language plpgsql security definer set search_path='' as $
+begin
+ if new.role in ('owner','co_owner','admin','moderator')
+    and old.role is distinct from new.role then
+    delete from public.ss_school_class_enrollments where profile_id=new.id;
+    delete from public.ss_organization_admins where profile_id=new.id;
+    delete from public.ss_school_memberships where profile_id=new.id;
+    delete from public.ss1_verified_guardians where guardian_id=new.id;
+ end if;
+ return new;
+end $;
+drop trigger if exists ss1_staff_promotion_clears_school_access on public.ss_profiles;
+create trigger ss1_staff_promotion_clears_school_access
+after update of role on public.ss_profiles for each row
+execute function public.ss1_remove_promoted_staff_school_access();
+
+-- Clear pre-existing cross-role assignments, but never delete school records.
+delete from public.ss_school_class_enrollments ce
+using public.ss_profiles p
+where p.id=ce.profile_id and p.role in ('owner','co_owner','admin','moderator');
+delete from public.ss_organization_admins a
+using public.ss_profiles p where p.id=a.profile_id and p.role in ('owner','co_owner','admin','moderator');
+delete from public.ss_school_memberships m
+using public.ss_profiles p where p.id=m.profile_id and p.role in ('owner','co_owner','admin','moderator');
+delete from public.ss1_verified_guardians g
+using public.ss_profiles p where p.id=g.guardian_id and p.role in ('owner','co_owner','admin','moderator');
+
+-- One-time, high-entropy, time-limited activation codes. An eligible nonstaff
+-- account uses a code to become the school's FIRST principal. The Owner cannot
+-- pick a principal or browse school membership or educational data.
+create table if not exists public.ss1_school_claims (
+ school_id uuid primary key references public.ss_schools(id) on delete cascade,
+ token_hash text not null,
+ expires_at timestamptz not null,
+ issued_at timestamptz not null default now()
+);
+alter table public.ss1_school_claims enable row level security;
+revoke all on public.ss1_school_claims from public,anon,authenticated;
+
+create or replace function public.ss1_issue_school_claim(p_school uuid)
+returns text language plpgsql security definer set search_path='' as $
+declare code text;
+begin
+ if public.ss1_platform_owner_id() is null then raise exception 'Only a platform Owner can provision a new school';end if;
+ -- No access to school content. This is ONLY the initial school setup step.
+ perform 1 from public.ss_schools s where s.id=p_school for update;
+ if not found then raise exception 'School not found';end if;
+ if exists(select 1 from public.ss_school_memberships m where m.school_id=p_school and m.role='principal')
+ then raise exception 'A school principal is already appointed. School staff control access from here.';end if;
+ code:=pg_catalog.encode(extensions.gen_random_bytes(24),'hex');
+ insert into public.ss1_school_claims(school_id,token_hash,expires_at)
+ values(p_school,pg_catalog.encode(extensions.digest(code,'sha256'),'hex'),now()+interval '30 days')
+ on conflict(school_id) do update set token_hash=excluded.token_hash,
+ expires_at=excluded.expires_at,issued_at=now();
+ return code;
+end $;
+
+-- Return only school name/code and setup status, never rosters, grades, or
+-- join applications. Co-Owners do not get this Owner lifecycle directory.
+create or replace function public.ss1_owner_school_directory()
+returns jsonb language sql stable security definer set search_path='' as $
+ select case when public.ss1_platform_owner_id() is null then
+   pg_catalog.jsonb_build_object('error','Owner required')
+ else pg_catalog.jsonb_build_object(
+   'schools',coalesce((select pg_catalog.jsonb_agg(
+     pg_catalog.jsonb_build_object('id',s.id,'name',s.name,'code',s.code,
+       'needs_setup',not exists(select 1 from public.ss_school_memberships m
+                               where m.school_id=s.id and m.role='principal'))
+     order by s.name)
+   from public.ss_schools s),'[]'::jsonb))
+ end
+$;
+
+-- New signature returns the claim code to show just once. The owner ONLY
+-- creates the school; no role is assigned to the owner.
+drop function if exists public.ss1_create_school(text,text);
+create function public.ss1_create_school(p_name text,p_code text)
+returns jsonb language plpgsql security definer set search_path='' as $
+declare actor uuid:=public.ss1_platform_owner_id(); directory_id uuid;
+ school uuid; code text;
+ n text:=pg_catalog.btrim(coalesce(p_name,''));c text:=pg_catalog.lower(pg_catalog.btrim(coalesce(p_code,'')));
+begin
+ if actor is null then raise exception 'Only an active platform Owner can create schools';end if;
+ if pg_catalog.length(n) not between 2 and 100 or c !~ '^[a-z0-9][a-z0-9-]{1,39}
+ then raise exception 'Enter a valid school name and unique code';end if;
+ if exists(select 1 from public.ss_schools where code=c) then raise exception 'School code already in use';end if;
+ insert into public.ss_organizations(name,code,created_by)
+ values('StudySpire1 school directory','studyspire1-school-directory',actor)
+ on conflict(code) do nothing;
+ select id into directory_id from public.ss_organizations where code='studyspire1-school-directory';
+ insert into public.ss_schools(organization_id,name,code,created_by)
+ values(directory_id,n,c,actor) returning id into school;
+ insert into public.ss1_school_branding(school_id) values(school);
+ code:=public.ss1_issue_school_claim(school);
+ insert into public.ss_school_audit(actor_id,school_id,action,detail)
+ values(actor,school,'school_created',n);
+ return pg_catalog.jsonb_build_object('id',school,'name',n,'code',c,'claim_code',code);
+end $;
+
+create or replace function public.ss1_delete_school(p_school uuid,p_confirm_code text)
+returns void language plpgsql security definer set search_path='' as $
+declare actor uuid:=public.ss1_platform_owner_id(); school public.ss_schools%rowtype;
+begin
+ if actor is null then raise exception 'Only a platform Owner can delete schools';end if;
+ select * into school from public.ss_schools where id=p_school for update;
+ if not found then raise exception 'School not found';end if;
+ if p_confirm_code is distinct from school.code then raise exception 'Type the exact school code to confirm deletion';end if;
+ -- Audit retained without school FK so deletion cannot erase platform history.
+ insert into public.ss_school_audit(actor_id,school_id,action,detail)
+ values(actor,null,'school_deleted',school.name||' ['||school.code||']');
+ delete from public.ss_schools where id=p_school;
+end $;
+
+create or replace function public.ss1_claim_school(p_school_code text,p_claim_code text)
+returns void language plpgsql security definer set search_path='' as $
+declare actor uuid:=public.ss_school_actor(); school uuid; row_claim public.ss1_school_claims%rowtype; hashed text;
+begin
+ if actor is null then raise exception 'Platform staff cannot join schools; sign in with a regular StudySpire account';end if;
+ if pg_catalog.length(coalesce(p_claim_code,''))<>48 or p_claim_code !~ '^[a-f0-9]{48}
+ then raise exception 'Enter the complete school activation code';end if;
+ select id into school from public.ss_schools
+ where code=pg_catalog.lower(pg_catalog.btrim(coalesce(p_school_code,'')))
+ order by created_at limit 1 for update;
+ if school is null then raise exception 'School not found';end if;
+ if exists(select 1 from public.ss_school_memberships where school_id=school and role='principal')
+ then raise exception 'This school is already activated';end if;
+ select * into row_claim from public.ss1_school_claims where school_id=school for update;
+ hashed:=pg_catalog.encode(extensions.digest(p_claim_code,'sha256'),'hex');
+ if row_claim.school_id is null or row_claim.token_hash<>hashed or row_claim.expires_at<=now()
+ then raise exception 'Activation code invalid or expired';end if;
+ if exists(select 1 from public.ss_school_memberships where school_id=school and profile_id=actor)
+ then raise exception 'Account already has a school membership';end if;
+ insert into public.ss_school_memberships(school_id,profile_id,role,assigned_by)
+ values(school,actor,'principal',actor);
+ delete from public.ss1_school_claims where school_id=school;
+ insert into public.ss_school_audit(actor_id,school_id,action,detail)
+ values(actor,school,'principal_activated','School activation completed');
+end $;
+
+-- School principals, not platform staff, appoint/manage school admins and
+-- principals. School admins receive only explicitly granted permissions.
+create or replace function public.ss1_set_school_role(p_school uuid,p_username text,p_role text)
+returns void language plpgsql security definer set search_path='' as $
+declare actor uuid:=public.ss_school_actor(); target uuid; prior text; target_platform text;
+ uname text:=pg_catalog.lower(pg_catalog.btrim(coalesce(p_username,'')));
+begin
+ if actor is null then raise exception 'Platform staff cannot manage school memberships';end if;
+ if p_role not in ('school_admin','principal','teacher','student','remove')
+ or p_role is null then raise exception 'Invalid school role';end if;
+ if uname !~ '^[a-z0-9_-]{3,32} then raise exception 'Enter a valid username';end if;
+ select id,role into target,target_platform from public.ss_profiles
+ where username=uname and (not banned or (banned_until is not null and banned_until<=now()));
+ if target is null then raise exception 'Active user not found';end if;
+ if target_platform in ('owner','co_owner','admin','moderator')
+ then raise exception 'StudySpire staff cannot be assigned to schools';end if;
+ select role into prior from public.ss_school_memberships where school_id=p_school and profile_id=target for update;
+ if prior='principal' or p_role='principal' or prior='school_admin' or p_role='school_admin' then
+  if not public.ss_school_principal(p_school) then raise exception 'Only the school principal manages school leadership';end if;
+ else
+  if not public.ss1_school_can(p_school,'manage_enrollment')
+  then raise exception 'Enrollment permission required';end if;
+ end if;
+ if prior='principal' and p_role<>'principal' then
+   perform pg_catalog.pg_advisory_xact_lock(67382,4821);
+   if (select count(*) from public.ss_school_memberships
+       where school_id=p_school and role='principal')<=1
+   then raise exception 'A school must retain at least one principal';end if;
+ end if;
+ if p_role='remove' then
+  delete from public.ss_school_memberships where school_id=p_school and profile_id=target;
+ else
+  insert into public.ss_school_memberships(school_id,profile_id,role,assigned_by)
+  values(p_school,target,p_role,actor)
+  on conflict(school_id,profile_id) do update set role=excluded.role,assigned_by=excluded.assigned_by,assigned_at=now();
+  if p_role='school_admin' then
+   insert into public.ss1_school_admin_permissions(school_id,profile_id,changed_by)
+   values(p_school,target,actor) on conflict(school_id,profile_id) do nothing;
+  end if;
+ end if;
+ insert into public.ss_school_audit(actor_id,school_id,action,detail)
+ values(actor,p_school,'school_role',uname||': '||coalesce(prior,'none')||' -> '||p_role);
+end $;
+
+create or replace function public.ss1_set_admin_permissions(p_school uuid,p_username text,p_permissions jsonb)
+returns void language plpgsql security definer set search_path='' as $
+declare actor uuid:=public.ss_school_actor();target uuid; key text; val jsonb;
+begin
+ if actor is null or not public.ss_school_principal(p_school) then
+  raise exception 'Only this school principal can configure school administrator permissions';end if;
+ if pg_catalog.jsonb_typeof(p_permissions)<>'object' or
+    (select count(*) from pg_catalog.jsonb_object_keys(p_permissions))<>6
+ then raise exception 'Exactly six permission switches required';end if;
+ for key,val in select * from pg_catalog.jsonb_each(p_permissions) loop
+  if key not in ('manage_schools','appoint_principals','manage_enrollment',
+   'view_analytics','publish_announcements','manage_settings')
+   or pg_catalog.jsonb_typeof(val)<>'boolean' then raise exception 'Invalid permission';end if;
+ end loop;
+ select p.id into target from public.ss_profiles p
+  join public.ss_school_memberships m on m.profile_id=p.id
+  where p.username=pg_catalog.lower(pg_catalog.btrim(p_username))
+    and m.school_id=p_school and m.role='school_admin';
+ if target is null then raise exception 'Not an appointed school administrator';end if;
+ insert into public.ss1_school_admin_permissions(school_id,profile_id,permissions,changed_by)
+ values(p_school,target,p_permissions,actor)
+ on conflict(school_id,profile_id) do update set permissions=excluded.permissions,
+ changed_by=excluded.changed_by,changed_at=now();
+ insert into public.ss_school_audit(actor_id,school_id,action,detail)
+ values(actor,p_school,'admin_permissions',p_username||' permissions updated');
+end $;
+
+-- Revoke old Owner-targeted school staff powers and keep ONLY new lifecycle RPCs
+-- for platform staff. Every school-content API relies on ss_school_actor(),
+-- which returns NULL for all platform staff, even their Co-Owners.
+revoke execute on function public.ss1_platform_owner_id() from public,anon,authenticated;
+revoke execute on function public.ss1_reject_platform_staff() from public,anon,authenticated;
+revoke execute on function public.ss1_remove_promoted_staff_school_access() from public,anon,authenticated;
+revoke execute on function public.ss1_issue_school_claim(uuid) from public,anon,authenticated;
+revoke execute on function public.ss1_create_school(text,text) from public,anon,authenticated;
+revoke execute on function public.ss1_delete_school(uuid,text) from public,anon,authenticated;
+revoke execute on function public.ss1_owner_school_directory() from public,anon,authenticated;
+revoke execute on function public.ss1_claim_school(text,text) from public,anon,authenticated;
+revoke execute on function public.ss1_set_school_role(uuid,text,text) from public,anon,authenticated;
+revoke execute on function public.ss1_set_admin_permissions(uuid,text,jsonb) from public,anon,authenticated;
+grant execute on function public.ss1_issue_school_claim(uuid),
+ public.ss1_create_school(text,text),public.ss1_delete_school(uuid,text),
+ public.ss1_owner_school_directory(),public.ss1_claim_school(text,text),
+ public.ss1_set_school_role(uuid,text,text),public.ss1_set_admin_permissions(uuid,text,jsonb)
+ to authenticated;
+
+-- Platform staff can never access school classroom content through old guards.
+-- Explicit null actor guard in the new RPCs plus removal of old owner bypass
+-- is the primary defense; the trigger is additional defense in depth.
+
 commit;
