@@ -552,7 +552,7 @@ begin
    raise exception 'Platform staff cannot hold any school role';
  end if;
  return new;
-end $;
+end $$;
 drop trigger if exists ss1_platform_staff_school_membership on public.ss_school_memberships;
 create trigger ss1_platform_staff_school_membership before insert or update on public.ss_school_memberships
 for each row execute function public.ss1_reject_platform_staff();
@@ -576,7 +576,7 @@ begin
     delete from public.ss1_verified_guardians where guardian_id=new.id;
  end if;
  return new;
-end $;
+end $$;
 drop trigger if exists ss1_staff_promotion_clears_school_access on public.ss_profiles;
 create trigger ss1_staff_promotion_clears_school_access
 after update of role on public.ss_profiles for each row
@@ -621,7 +621,7 @@ begin
  on conflict(school_id) do update set token_hash=excluded.token_hash,
  expires_at=excluded.expires_at,issued_at=now();
  return code;
-end $;
+end $$;
 
 -- Return only school name/code and setup status, never rosters, grades, or
 -- join applications. Co-Owners do not get this Owner lifecycle directory.
@@ -663,7 +663,7 @@ begin
  insert into public.ss_school_audit(actor_id,school_id,action,detail)
  values(actor,school,'school_created',n);
  return pg_catalog.jsonb_build_object('id',school,'name',n,'code',c,'claim_code',code);
-end $;
+end $$;
 
 create or replace function public.ss1_delete_school(p_school uuid,p_confirm_code text)
 returns void language plpgsql security definer set search_path='' as $$
@@ -677,7 +677,7 @@ begin
  insert into public.ss_school_audit(actor_id,school_id,action,detail)
  values(actor,null,'school_deleted',school.name||' ['||school.code||']');
  delete from public.ss_schools where id=p_school;
-end $;
+end $$;
 
 create or replace function public.ss1_claim_school(p_school_code text,p_claim_code text)
 returns void language plpgsql security definer set search_path='' as $$
@@ -703,7 +703,7 @@ begin
  delete from public.ss1_school_claims where school_id=school;
  insert into public.ss_school_audit(actor_id,school_id,action,detail)
  values(actor,school,'principal_activated','School activation completed');
-end $;
+end $$;
 
 -- School principals, not platform staff, appoint/manage school admins and
 -- principals. School admins receive only explicitly granted permissions.
@@ -747,7 +747,7 @@ begin
  end if;
  insert into public.ss_school_audit(actor_id,school_id,action,detail)
  values(actor,p_school,'school_role',uname||': '||coalesce(prior,'none')||' -> '||p_role);
-end $;
+end $$;
 
 create or replace function public.ss1_set_admin_permissions(p_school uuid,p_username text,p_permissions jsonb)
 returns void language plpgsql security definer set search_path='' as $$
@@ -774,7 +774,7 @@ begin
  changed_by=excluded.changed_by,changed_at=now();
  insert into public.ss_school_audit(actor_id,school_id,action,detail)
  values(actor,p_school,'admin_permissions',p_username||' permissions updated');
-end $;
+end $$;
 
 -- Revoke old Owner-targeted school staff powers and keep ONLY new lifecycle RPCs
 -- for platform staff. Every school-content API relies on ss_school_actor(),
