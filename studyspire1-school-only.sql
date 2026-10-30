@@ -80,7 +80,7 @@ declare actor uuid:=public.ss_school_actor(); org uuid; school uuid;
  n text:=btrim(coalesce(p_name,'')); v_code text:=lower(btrim(coalesce(p_code,'')));
 begin
  if actor is null or not public.ss1_owner() then raise exception 'Only the platform Owner can create schools';end if;
- if length(n) not between 2 and 100 or v_code !~ '^[a-z0-9][a-z0-9-]{2,39} then
+ if length(n) not between 2 and 100 or v_code !~ '^[a-z0-9][a-z0-9-]{2,39}$' then
   raise exception 'School name must be 2-100 characters; code 3-40 lowercase letters, digits or dashes';end if;
  if exists(select 1 from public.ss_schools where lower(join_code)=v_code)
  then raise exception 'That school join code is already in use';end if;
@@ -89,18 +89,6 @@ begin
  values(org,n,'school-'||replace(org::text,'-',''),actor);
  insert into public.ss_schools(organization_id,name,code,join_code,created_by)
  values(org,n,v_code,v_code,actor) returning id into school;
- insert into public.ss_school_audit(actor_id,organization_id,school_id,action,detail)
- values(actor,org,school,'school_created',n);
- return school;
-end $$; then
-  raise exception 'School name must be 2-100 characters; code 3-40 lowercase letters, digits or dashes';end if;
- if exists(select 1 from public.ss_schools where lower(join_code)=code)
- then raise exception 'That school join code is already in use';end if;
- org:=gen_random_uuid();
- insert into public.ss_organizations(id,name,code,created_by)
- values(org,n,'school-'||replace(org::text,'-',''),actor);
- insert into public.ss_schools(organization_id,name,code,join_code,created_by)
- values(org,n,code,code,actor) returning id into school;
  insert into public.ss_school_audit(actor_id,organization_id,school_id,action,detail)
  values(actor,org,school,'school_created',n);
  return school;
@@ -190,23 +178,9 @@ declare actor uuid:=public.ss_school_actor(); school uuid; n text; request_id uu
 begin
  if actor is null then raise exception 'Sign in first';end if;
  if p_role not in ('student','teacher') then raise exception 'Choose Student or Teacher';end if;
- if v_code !~ '^[a-z0-9][a-z0-9-]{2,39} then raise exception 'Enter a valid school code';end if;
+ if v_code !~ '^[a-z0-9][a-z0-9-]{2,39}$' then raise exception 'Enter a valid school code';end if;
  if length(btrim(coalesce(p_note,'')))>300 then raise exception 'Message too long';end if;
  select id,name into school,n from public.ss_schools where join_code=v_code;
- if school is null then raise exception 'School code not found';end if;
- if exists(select 1 from public.ss_school_memberships where school_id=school and profile_id=actor)
- then raise exception 'You already belong to that school';end if;
- if exists(select 1 from public.ss_school_join_requests where school_id=school and profile_id=actor and status='pending')
- then raise exception 'Your request is already pending';end if;
- if (select count(*) from public.ss_school_join_requests where profile_id=actor and status='pending')>=5
- or (select count(*) from public.ss_school_join_requests where profile_id=actor and requested_at>now()-interval '1 day')>=10
- then raise exception 'School join request limit reached';end if;
- insert into public.ss_school_join_requests(school_id,profile_id,requested_role,note)
- values(school,actor,p_role,btrim(coalesce(p_note,''))) returning id into request_id;
- return jsonb_build_object('id',request_id,'school_name',n,'status','pending');
-end $$; then raise exception 'Enter a valid school code';end if;
- if length(btrim(coalesce(p_note,'')))>300 then raise exception 'Message too long';end if;
- select id,name into school,n from public.ss_schools where join_code=code;
  if school is null then raise exception 'School code not found';end if;
  if exists(select 1 from public.ss_school_memberships where school_id=school and profile_id=actor)
  then raise exception 'You already belong to that school';end if;
