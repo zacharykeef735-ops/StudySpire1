@@ -1,338 +1,298 @@
-/* StudySpire1 organization and school manager. UI permissions are hints;
-   Supabase RPCs are the actual security boundary. No external API keys. */
-(()=>{
-'use strict';
-const ID='ssSchoolManager';
-let state={is_owner:false,organizations:[],requests:[],pending:[]};
-let chosenOrg='',chosenSchool='',loading=false,mounted=false,refreshSerial=0,inviteOpened=false;
-const byId=id=>document.getElementById(id);
-function el(tag,content,cls){
- const n=document.createElement(tag);
- if(cls)n.className=cls;
- if(content!==undefined&&content!==null)n.textContent=String(content);
- return n;
+/* StudySpire1 Schools — same StudySpire experience, optional school integration.
+ * Permissions are enforced server-side by Supabase, not by button visibility. */
+(()=>{'use strict';
+const ID='ssSchoolManager',KEY='ss1-active-school';
+const $=id=>document.getElementById(id);
+const make=(tag,value,cls)=>{const n=document.createElement(tag);if(value!=null)n.textContent=String(value);if(cls)n.className=cls;return n};
+const btn=(label,fn,cls='ss-sm-btn')=>{const b=make('button',label,cls);b.type='button';b.onclick=fn;return b};
+const P={
+ manage_schools:'Create and manage schools',
+ appoint_principals:'Appoint school principals',
+ manage_enrollment:'Manage student enrollment',
+ view_analytics:'View school analytics',
+ publish_announcements:'Publish school announcements',
+ manage_settings:'Manage school settings'
+};
+let data={is_owner:false,schools:[]},schoolId='',applications=[],pending=[],busy=false,sequence=0,mounted=false;
+const api=()=>{const b=window.StudySpireSchoolBridge;if(!b?.ready?.())throw Error('Sign in to StudySpire Cloud first');return b};
+const school=()=>data.schools.find(s=>s.id===schoolId)||null;
+function note(message=''){const el=$('ssSchoolNotice');if(el){el.textContent=message;el.hidden=!message}}
+function heading(label,subtitle){const n=make('div',null,'ss-sm-section-heading');n.append(make('h3',label));if(subtitle)n.append(make('p',subtitle));return n}
+function field(label,placeholder='',value='',type='text'){
+ const wrap=make('label',null,'ss-sm-field'),name=make('span',label);
+ const input=document.createElement(type==='textarea'?'textarea':'input');
+ if(type!=='textarea')input.type=type;
+ input.value=String(value||'');input.placeholder=placeholder;input.maxLength=type==='textarea'?2000:160;input.required=true;
+ wrap.append(name,input);return {wrap,input};
 }
-function action(text,callback,cls='ss-sm-btn'){
- const b=el('button',text,cls);b.type='button';b.addEventListener('click',callback);return b;
+function form(label,fields,submit){
+ const f=make('form',null,'ss-sm-form'),area=make('div',null,'ss-sm-form-fields');
+ for(const {wrap} of fields)area.append(wrap);
+ const b=btn(label,null,'ss-sm-btn ss-sm-primary');b.type='submit';
+ f.append(area,b);
+ f.onsubmit=e=>{e.preventDefault();void perform(label,()=>submit(...fields.map(x=>x.input.value.trim())))};
+ return f;
 }
-function field(label,placeholder,value=''){
- const holder=el('label',null,'ss-sm-field'),span=el('span',label);
- const input=el('input');input.type='text';input.required=true;input.maxLength=100;
- input.placeholder=placeholder;input.value=value;
- holder.append(span,input);return {holder,input};
+async function perform(label,callback){
+ if(busy)return;busy=true;const root=$(ID);root?.classList.add('ss-sm-busy');note(label+'…');
+ try{const res=await callback();if(res===false){note('No changes made.');return}
+  await refresh();note(label+' completed.')}
+ catch(e){note('Could not complete '+label+': '+String(e?.message||e))}
+ finally{busy=false;root?.classList.remove('ss-sm-busy')}
 }
-function formButton(label,handler,fields,opts={}){
- const form=el('form',null,'ss-sm-form');
- const row=el('div',null,'ss-sm-form-fields');
- for(const f of fields)row.append(f.holder);
- const submit=el('button',label,'ss-sm-btn ss-sm-primary');submit.type='submit';
- form.append(row,submit);
- form.addEventListener('submit',async ev=>{
-  ev.preventDefault();
-  if(loading)return;
-  await perform(async()=>handler(...fields.map(f=>f.input.value.trim())),label);
- });
- return form;
-}
-function info(text){const n=byId('ssSchoolNotice');if(n){n.textContent=text||'';n.hidden=!text}}
-function bridge(){const b=window.StudySpireSchoolBridge;if(!b?.ready?.())throw Error('Sign in to StudySpire Cloud first');return b}
-function selectedOrg(){return state.organizations.find(o=>o.id===chosenOrg)||null}
-function selectedSchool(org){return org?.schools?.find(s=>s.id===chosenSchool)||null}
-function isPlatformLead(){const p=window.StudySpireSchoolBridge?.account?.();return ['owner','co_owner'].includes(p?.role)}
-async function perform(fn,description){
- if(loading)return;loading=true;const root=byId(ID);root?.classList.add('ss-sm-busy');
- info('Saving '+description+'…');
- try{await fn();await refresh(true);info(description+' saved.')}
- catch(err){info('Could not save: '+String(err?.message||err))}
- finally{loading=false;root?.classList.remove('ss-sm-busy')}
-}
-function makeManager(){
- if(byId(ID))return;
- const root=el('div',null,'ss-sm-overlay');root.id=ID;root.hidden=true;
- root.innerHTML='<section class="ss-sm-panel" role="dialog" aria-modal="true" aria-labelledby="ssSchoolHeading" tabindex="-1">'+
- '<header class="ss-sm-heading"><div><small>STUDYSPIRE1 · SCHOOL CLOUD</small><h2 id="ssSchoolHeading">Organizations & Schools</h2><p>Owner-managed districts, schools and role permissions</p></div>'+
- '<button class="ss-sm-close" id="ssSchoolClose" type="button" aria-label="Close school management">✕ Close</button></header>'+
- '<p id="ssSchoolNotice" class="ss-sm-notice" role="status" aria-live="polite" hidden></p>'+
- '<div class="ss-sm-columns"><aside class="ss-sm-organizations" id="ssSchoolOrganizations"></aside><main class="ss-sm-content" id="ssSchoolDetails"></main></div></section>';
- document.body.append(root);
- byId('ssSchoolClose').onclick=close;
+function mount(){
+ if(mounted)return;mounted=true;
+ const root=make('div',null,'ss-sm-overlay');root.id=ID;root.hidden=true;
+ root.innerHTML='<section class="ss-sm-panel" role="dialog" aria-modal="true" aria-labelledby="ssSchoolHeading" tabindex="-1"><header class="ss-sm-heading"><div><small>STUDYSPIRE1 · CONNECTED SCHOOLS</small><h2 id="ssSchoolHeading">🏫 Schools</h2><p>All your normal StudySpire tools, plus classes and school features</p></div><button id="ssSchoolClose" type="button">✕ Close</button></header><p class="ss-sm-notice" id="ssSchoolNotice" role="status" aria-live="polite" hidden></p><div class="ss-sm-columns"><aside class="ss-sm-organizations" id="ssSchoolList"></aside><main class="ss-sm-content" id="ssSchoolDetail"></main></div></section>';
+ document.body.append(root);$('ssSchoolClose').onclick=close;
  root.addEventListener('click',e=>{if(e.target===root)close()});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!root.hidden)close()});
-}
-function close(){const root=byId(ID);if(root)root.hidden=true}
-function open(){
- makeManager();const root=byId(ID);root.hidden=false;
- root.querySelector('.ss-sm-panel').focus();void refresh(true);
-}
-function mountNav(){
- if(mounted)return;
- makeManager();
- const nav=document.querySelector('.sidebar .sd-nav-group .nav')||document.querySelector('.sidebar .nav');
- if(nav){
-  const b=el('button');b.type='button';
-  b.id='ssSchoolsNav';b.className='ss-sm-nav';b.innerHTML='<span class="navicon">🏫</span><span class="sd-navtext">Organizations & Schools</span>';
-  b.addEventListener('click',open);nav.append(b);
- }
- const top=document.querySelector('.topright');
- if(top){const b=action('🏫 Schools',open,'btn secondary small');b.id='ssSchoolsTop';top.append(b)}
- const quick=document.querySelector('.sd-dashboard-actions');
- if(quick){
-  const b=action('🏫 Organizations & Schools',open);b.id='ssSchoolsQuick';
-  b.className='ss-sm-quick';quick.append(b);
- }
- mounted=true;showLaunchers(false);
+ const add=(host,label,cls)=>{if(!host)return;const b=btn(label,open,cls);b.id=cls==='ss-sm-nav'?'ssSchoolsNav':cls==='ss-sm-quick'?'ssSchoolsQuick':'ssSchoolsTop';host.append(b)};
+ add(document.querySelector('.sidebar .sd-nav-group .nav')||document.querySelector('.sidebar .nav'),'🏫 Schools','ss-sm-nav');
+ add(document.querySelector('.sd-dashboard-actions'),'🏫 My School','ss-sm-quick');
+ add(document.querySelector('.topright'),'🏫 Schools','btn secondary small');
+ showLaunchers(false);
 }
 function showLaunchers(show){
- for(const id of ['ssSchoolsNav','ssSchoolsTop','ssSchoolsQuick']){const n=byId(id);if(n)n.hidden=!show}
+ for(const id of ['ssSchoolsNav','ssSchoolsTop','ssSchoolsQuick']){const node=$(id);if(node)node.hidden=!show}
 }
-function heading(text,sub){
- const wrap=el('div',null,'ss-sm-section-heading');
- wrap.append(el('h3',text));
- if(sub)wrap.append(el('p',sub));return wrap;
-}
-function addPill(text,cls=''){
- return el('span',text,'ss-sm-pill '+cls);
-}
-function renderLeft(){
- const host=byId('ssSchoolOrganizations');if(!host)return;
- host.replaceChildren(heading('Organizations','Choose an organization to see its schools.'));
- for(const org of state.organizations){
-  const b=action('',()=>{chosenOrg=org.id;chosenSchool=org.schools?.[0]?.id||'';void refresh(true)});
-  b.className='ss-sm-org '+(org.id===chosenOrg?'selected':'');
-  b.append(el('strong',org.name),el('small',org.code));
+function open(){if(!mounted)mount();$(ID).hidden=false;$(ID).querySelector('.ss-sm-panel').focus();void refresh()}
+function close(){if($(ID))$(ID).hidden=true}
+function side(){
+ const host=$('ssSchoolList');if(!host)return;host.replaceChildren();
+ host.append(heading('My Schools',data.is_owner?'Manage any school':'Your school accounts'));
+ for(const s of data.schools){
+  const b=btn('',()=>{schoolId=s.id;try{localStorage.setItem(KEY,schoolId)}catch{}draw();void loadPending()});
+  b.className='ss-sm-org'+(s.id===schoolId?' selected':'');
+  b.append(make('strong',s.name),make('small',s.my_role?'Member · '+s.my_role:s.is_admin?'School admin':'School management'));
   host.append(b);
  }
- if(!state.organizations.length)host.append(el('p',state.is_owner?'Create your first organization below.':'You are not in a school yet. Use Join a school on the right.','ss-sm-muted'));
- if(state.is_owner){
-  host.append(heading('New organization','Only platform Owners and Co-Owners can create organizations.'));
-  const a=field('Organization name','e.g. North District'),b=field('Organization code','e.g. north-district');
-  host.append(formButton('＋ Create organization',async(name,code)=>{
-   const id=await bridge().rpc('ss_school_create_organization',{p_name:name,p_code:code});
-   if(id){chosenOrg=id;chosenSchool=''}
-  },[a,b]));
+ if(!data.schools.length)host.append(make('p','You are not part of a school yet. Apply using a school code.','ss-sm-muted'));
+ if(data.is_owner){
+  const card=make('section',null,'ss-sm-card');
+  card.append(heading('Create school','Only the platform Owner creates schools. No organization setup required.'));
+  const n=field('School name','e.g. Central High School'),c=field('School join code','e.g. central-high');
+  card.append(form('＋ Create school',[n,c],async(name,code)=>{
+   const result=await api().rpc('ss1_school_create',{p_name:name,p_code:code});
+   if(result)schoolId=result;
+  }));
+  host.append(card);
  }
 }
-function renderAdminSection(host,org){
- if(!org.can_manage_org)return;
- const block=el('section',null,'ss-sm-card');
- block.append(heading('Organization administrators','Admins can manage schools and assign principals in this organization. They cannot become platform Owners.'));
- const admins=el('div',null,'ss-sm-lines');
- for(const admin of org.admins||[]){
-  const row=el('div',null,'ss-sm-line');
-  row.append(el('span','@'+admin.username));
-  if(org.can_assign_admin)row.append(action('Remove admin',()=>perform(
-   ()=>bridge().rpc('ss_school_set_admin',{p_organization:org.id,p_username:admin.username,p_enabled:false}),
-   'admin removal'),'ss-sm-btn ss-sm-danger'));
-  block.append(row);
- }
- if(!(org.admins||[]).length)block.append(el('p','No organization admins yet.','ss-sm-muted'));
- if(org.can_assign_admin){
-  const u=field('StudySpire username','existing-username');
-  block.append(formButton('＋ Appoint org admin',async username=>{
-   if(!confirm('Give @'+username+' organization admin permissions for '+org.name+'?'))return;
-   await bridge().rpc('ss_school_set_admin',{p_organization:org.id,p_username:username,p_enabled:true});
-  },[u]));
- }
- host.append(block);
-}
-function renderSchoolTools(host,org){
- if(!org.can_manage_org)return;
- const block=el('section',null,'ss-sm-card');
- block.append(heading('Add a school','Organization admins and platform Owners can create schools.'));
- const n=field('School name','e.g. Central High School'),c=field('School code','central-high');
- block.append(formButton('＋ Create school',async(name,code)=>{
-  const id=await bridge().rpc('ss_school_create_school',{p_organization:org.id,p_name:name,p_code:code});
-  if(id)chosenSchool=id;
- },[n,c]));host.append(block);
-}
-function shareInvite(org,school){
- const url=new URL(window.location.href);
- url.searchParams.set('join_org',org.code);
- url.searchParams.set('join_school',school.code);
- url.hash='';
- const link=url.toString();
- if(navigator.clipboard?.writeText)navigator.clipboard.writeText(link).then(()=>info('Invite link copied. Students and teachers will still need approval.')).catch(()=>window.prompt('Copy this school join link:',link));
- else window.prompt('Copy this school join link:',link);
-}
-function renderJoin(host){
- const block=el('section',null,'ss-sm-card ss-sm-join');
- block.append(heading('Join a school','Enter the two codes from your school. Your request goes to a principal or school administrator for approval.'));
- const org=field('Organization code','e.g. central-district');
- const school=field('School code','e.g. central-high');
- const qs=new URLSearchParams(window.location.search);
- org.input.value=qs.get('join_org')||'';
- school.input.value=qs.get('join_school')||'';
- const roleHolder=el('label',null,'ss-sm-field');roleHolder.append(el('span','I am joining as'));
- const role=el('select');role.required=true;
- for(const type of ['student','teacher']){const opt=el('option',type==='student'?'Student':'Teacher');opt.value=type;role.append(opt)}
- roleHolder.append(role);
- const message=field('Optional message','e.g. I am in grade 7');
- message.input.required=false;message.input.maxLength=300;
- block.append(formButton('Request to join',async(o,c,r,n)=>{
-  if(!confirm('Request '+r+' access to '+c+' at '+o+'? A school leader must approve you.'))return;
-  await bridge().rpc('ss_school_request_join',{p_org_code:o,p_school_code:c,p_role:r,p_note:n});
- },[org,school,{holder:roleHolder,input:role},message]));
- const requests=el('div',null,'ss-sm-request-list');
- requests.append(heading('My applications','Pending, approved, and declined requests for this account.'));
- if(!(state.requests||[]).length)requests.append(el('p','No school applications yet.','ss-sm-muted'));
- for(const request of state.requests||[]){
-  const line=el('div',null,'ss-sm-line');
-  const label=el('span',''+request.school_name+' · '+request.organization_name);
-  label.append(el('small',' '+request.requested_role));
-  line.append(label,addPill(request.status,request.status==='approved'?'ss-sm-approved':''));
-  if(request.status==='pending')line.append(action('Cancel',()=>perform(
-   ()=>bridge().rpc('ss_school_cancel_join',{p_request:request.id}),'application cancellation'),'ss-sm-btn ss-sm-danger'));
-  requests.append(line);
- }
- block.append(requests);host.append(block);
-}
-function renderPending(host,school){
- if(!school.can_manage_members)return;
- const block=el('section',null,'ss-sm-card ss-sm-requests');
- block.append(heading('School join requests','Review student and teacher requests before granting access.'));
- const applications=state.pending||[];
- block.append(addPill(applications.length+' pending'));
- if(!applications.length)block.append(el('p','No pending requests for this school.','ss-sm-muted'));
+function join(){
+ const host=make('section',null,'ss-sm-card');
+ host.append(heading('Join a School','Enter one code. A school leader must approve your request.'));
+ const code=field('School code','e.g. central-high'),reason=field('Message (optional)','Why you are requesting access');
+ reason.input.required=false;reason.input.maxLength=300;
+ const wrap=make('label',null,'ss-sm-field');wrap.append(make('span','Join as'));
+ const role=make('select');for(const val of ['student','teacher']){const opt=make('option',val==='student'?'Student':'Teacher');opt.value=val;role.append(opt)}wrap.append(role);
+ const f=form('Request to join',[code,{wrap,input:role},reason],async(c,r,n)=>api().rpc('ss1_school_request_join',{p_code:c,p_role:r,p_note:n}));
+ host.append(f);
+ const section=make('div',null,'ss-sm-roster');section.append(heading('My applications','Applications are not enrollments until approved.'));
  for(const request of applications){
-  const line=el('div',null,'ss-sm-application');
-  line.append(el('strong','@'+request.username),addPill(request.role));
-  if(request.note)line.append(el('p',request.note,'ss-sm-muted'));
-  line.append(el('small','Requested '+new Date(request.requested_at).toLocaleString()));
-  const actions=el('div',null,'ss-sm-request-actions');
-  actions.append(action('Approve',()=>{if(confirm('Approve @'+request.username+' as '+request.role+' at '+school.name+'?'))void perform(
-   ()=>bridge().rpc('ss_school_review_join',{p_request:request.id,p_approve:true}),'application approval')},'ss-sm-btn ss-sm-primary'));
-  actions.append(action('Decline',()=>{if(confirm('Decline the request from @'+request.username+'?'))void perform(
-   ()=>bridge().rpc('ss_school_review_join',{p_request:request.id,p_approve:false}),'application decline')},'ss-sm-btn ss-sm-danger'));
-  line.append(actions);block.append(line);
+  const row=make('div',null,'ss-sm-line');row.append(make('strong',request.school_name||'School'),make('span',request.status||'pending'));
+  if(request.status==='pending')row.append(btn('Cancel',()=>perform('Cancel request',()=>api().rpc('ss_school_cancel_join',{p_request:request.id})),'ss-sm-btn ss-sm-danger'));
+  section.append(row);
  }
- host.append(block);
+ if(!applications.length)section.append(make('p','No applications yet.','ss-sm-muted'));
+ host.append(section);
+ return host;
 }
-function renderSchool(host,org,school){
- const block=el('section',null,'ss-sm-card');
- const h=heading(school.name,'School code: '+school.code);
- const cap=el('div',null,'ss-sm-tags');
- cap.append(addPill(school.my_role?'Your role: '+school.my_role:'School access via organization'));
- if(school.can_assign_principal)cap.append(addPill('Manage principals'));
- if(school.can_create_class)cap.append(addPill('Create classes'));
- block.append(h,cap);
- if(school.can_manage_members||org.can_manage_org)block.append(action('🔗 Copy school join link',()=>shareInvite(org,school),'ss-sm-btn'));
- // The roster is returned ONLY for platform Owners, org admins and school principals.
- const roster=el('div',null,'ss-sm-roster');
- roster.append(heading('School staff & members','Assignments belong to this school only.'));
- if(!school.can_manage_members){
-  roster.append(el('p','School leaders manage the private member list.','ss-sm-muted'));
- }else{
-  if(!(school.members||[]).length)roster.append(el('p','No principal, teacher or student accounts assigned yet.','ss-sm-muted'));
-  for(const member of school.members||[]){
-   const row=el('div',null,'ss-sm-line');
-   row.append(el('span','@'+member.username),addPill(member.role));
-   if(member.role!=='principal'||school.can_assign_principal){
-    row.append(action('Remove',()=>perform(
-      ()=>bridge().rpc('ss_school_set_member',{p_school:school.id,p_username:member.username,p_role:'remove'}),
-      'member removal'),'ss-sm-btn ss-sm-danger'));
-   }
-   roster.append(row);
+function getRights(s){return s.permissions||{}}
+function adminTools(s){
+ if(!data.is_owner)return null;
+ const host=make('section',null,'ss-sm-card'),h=heading('School administrators','Assign existing StudySpire accounts, then customize what each admin can do.');
+ host.append(h);
+ const username=field('Existing username','studyspire-username');
+ host.append(form('＋ Appoint school admin',[username],async u=>{
+  if(!confirm('Appoint @'+u+' as a school admin at '+s.name+'?'))return false;
+  return api().rpc('ss1_school_set_admin',{p_school:s.id,p_username:u,p_enabled:true});
+ }));
+ for(const admin of s.admins||[]){
+  const panel=make('div',null,'ss-sm-admin-permissions');
+  const line=make('div',null,'ss-sm-line');
+  line.append(make('strong','🛡 @'+admin.username));
+  line.append(btn('Remove admin',()=>{if(confirm('Revoke school administrator access for @'+admin.username+'?'))void perform('Remove school admin',()=>api().rpc('ss1_school_set_admin',{p_school:s.id,p_username:admin.username,p_enabled:false}))},'ss-sm-btn ss-sm-danger'));
+  panel.append(line);
+  const grid=make('div',null,'ss-sm-permission-grid');
+  for(const [name,label] of Object.entries(P)){
+   const wrap=make('label',null,'ss-sm-permission-row'),check=make('input');
+   check.type='checkbox';check.checked=admin.permissions?.[name]===true;
+   wrap.append(make('span',label),check);
+   check.onchange=()=>{
+    const enabled=check.checked;check.disabled=true;
+    void perform('Update permission',()=>api().rpc('ss1_school_set_permission',{
+     p_school:s.id,p_username:admin.username,p_permission:name,p_enabled:enabled
+    })).finally(()=>{check.disabled=false});
+   };
+   grid.append(wrap);
   }
-  const u=field('Existing StudySpire username','student-or-staff');
-  const r=el('label',null,'ss-sm-field');r.append(el('span','School role'));
-  const select=el('select');select.required=true;
-  const roles=school.can_assign_principal?['principal','teacher','student']:['teacher','student'];
-  for(const role of roles){const option=el('option',role==='principal'?'Principal':role==='teacher'?'Teacher':'Student');option.value=role;select.append(option)}
-  r.append(select);
-  roster.append(formButton('Assign school role',async(username)=>{
-   const role=select.value;
-   if(!confirm('Assign @'+username+' as '+role+' at '+school.name+'?'))return;
-   await bridge().rpc('ss_school_set_member',{p_school:school.id,p_username:username,p_role:role});
-  },[u,{holder:r,input:select}]));
+  panel.append(grid);host.append(panel);
  }
- block.append(roster);
- renderPending(block,school);
- const classes=el('div',null,'ss-sm-roster');
- classes.append(heading('Classes','Only school principals and platform Owners can create classes.'));
- for(const course of school.classes||[]){
-  const line=el('div',null,'ss-sm-line');
-  line.append(el('strong',course.title),el('small',course.subject||'General'));
-  line.append(action('Open classroom',()=>window.StudySpireClassroom?.open(course.id,course.title),'ss-sm-btn'));
-  classes.append(line);
- }
- if(!(school.classes||[]).length)classes.append(el('p','No classes created yet.','ss-sm-muted'));
- if(school.can_create_class){
-  const title=field('Class name','e.g. Algebra I'),subject=field('Subject','Mathematics');
-  classes.append(formButton('＋ Create class',async(t,s)=>{
-   await bridge().rpc('ss_school_create_class',{p_school:school.id,p_title:t,p_subject:s});
-  },[title,subject]));
- }
- block.append(classes);host.append(block);
+ return host;
 }
-function renderRight(){
- const host=byId('ssSchoolDetails');if(!host)return;host.replaceChildren();
- renderJoin(host);
- const org=selectedOrg();
- if(!org){
-  host.append(heading('School Management','Select an organization or create one to start.'));
-  if(!state.is_owner)host.append(el('p','Request to join above, then wait for a school principal or administrator to approve your account.','ss-sm-muted'));
-  return;
+function roster(s){
+ const rights=getRights(s);
+ if(!(rights.manage_enrollment||rights.appoint_principals||s.my_role==='principal'))return null;
+ const host=make('section',null,'ss-sm-card');
+ host.append(heading('School members','Principals, teachers, and students are assigned to this school only.'));
+ for(const member of s.members||[]){
+  const row=make('div',null,'ss-sm-line');row.append(make('strong','@'+member.username),make('small',member.role));
+  const mayRemove=member.role==='principal'?rights.appoint_principals:(rights.manage_enrollment||s.my_role==='principal');
+  if(mayRemove)row.append(btn('Remove',()=>{if(confirm('Remove @'+member.username+' from this school?'))void perform('Remove school member',()=>api().rpc('ss1_school_set_member',{p_school:s.id,p_username:member.username,p_role:'remove'}))},'ss-sm-btn ss-sm-danger'));
+  host.append(row);
  }
- const top=el('div',null,'ss-sm-org-head');
- top.append(heading(org.name,'Organization: '+org.code));
- top.append(addPill(org.can_manage_org?'Management access':'Member access'));
- host.append(top);
- renderAdminSection(host,org);
- const schools=el('section',null,'ss-sm-card');
- schools.append(heading('Schools','Each school has its own principals, teachers, students and classes.'));
- const buttons=el('div',null,'ss-sm-school-tabs');
- for(const s of org.schools||[]){
-  const b=action(s.name,()=>{chosenSchool=s.id;void refresh(true)});
-  b.className='ss-sm-btn '+(s.id===chosenSchool?'ss-sm-selected':'');buttons.append(b);
+ if(rights.manage_enrollment||rights.appoint_principals||s.my_role==='principal'){
+  const username=field('Existing username','school-user');
+  const wrap=make('label',null,'ss-sm-field');wrap.append(make('span','School role'));
+  const role=make('select');
+  const opts=rights.appoint_principals?['principal','teacher','student']:['teacher','student'];
+  for(const item of opts){const o=make('option',item);o.value=item;role.append(o)}
+  wrap.append(role);
+  host.append(form('Assign school role',[username,{wrap,input:role}],(u,r)=>api().rpc('ss1_school_set_member',{
+   p_school:s.id,p_username:u,p_role:r
+  })));
  }
- if(!(org.schools||[]).length)buttons.append(el('p','No schools available yet.','ss-sm-muted'));
- schools.append(buttons);host.append(schools);
- renderSchoolTools(host,org);
- const current=selectedSchool(org);
- if(current)renderSchool(host,org,current);
+ return host;
 }
-function render(){
- renderLeft();renderRight();
-}
-async function refresh(force){
- const api=window.StudySpireSchoolBridge,serial=++refreshSerial;
- if(!api?.ready?.()){
-  state={is_owner:false,organizations:[],requests:[],pending:[]};showLaunchers(false);close();return;
+function applicationsPanel(s){
+ if(!(getRights(s).manage_enrollment||s.my_role==='principal'))return null;
+ const host=make('section',null,'ss-sm-card');
+ host.append(heading('Join requests','Approve applications before giving anyone access.'));
+ if(!pending.length)host.append(make('p','No pending requests for this school.','ss-sm-muted'));
+ for(const req of pending){
+  const row=make('div',null,'ss-sm-line');
+  row.append(make('strong','@'+req.username+' · '+req.role),make('small',req.note||'No message'));
+  row.append(btn('Approve',()=>perform('Approve request',()=>api().rpc('ss1_school_review_join',{p_request:req.id,p_approve:true})),'ss-sm-btn ss-sm-primary'));
+  row.append(btn('Decline',()=>perform('Decline request',()=>api().rpc('ss1_school_review_join',{p_request:req.id,p_approve:false})),'ss-sm-btn ss-sm-danger'));
+  host.append(row);
  }
- showLaunchers(true);
+ return host;
+}
+function announcementPanel(s){
+ const rights=getRights(s),host=make('section',null,'ss-sm-card');
+ host.append(heading('School announcements','Updates are visible only to school members and authorized staff.'));
+ for(const item of s.announcements||[]){
+  const card=make('div',null,'ss-sm-announcement');
+  card.append(make('strong',item.title),make('small',new Date(item.created_at).toLocaleDateString()),make('p',item.body));
+  host.append(card);
+ }
+ if(!(s.announcements||[]).length)host.append(make('p','No announcements yet.','ss-sm-muted'));
+ if(rights.publish_announcements||s.my_role==='principal'){
+  const title=field('Announcement title','Event or school update'),body=field('Message','What should members know?','','textarea');
+  host.append(form('Publish announcement',[title,body],(t,b)=>api().rpc('ss1_school_announce',{p_school:s.id,p_title:t,p_body:b})));
+ }
+ return host;
+}
+function settingsPanel(s){
+ const rights=getRights(s),h=make('section',null,'ss-sm-card');
+ h.append(heading('School branding & settings','Customize this school without changing other schools.'));
+ if(rights.manage_schools){
+  const name=field('School name','School name',s.name);
+  h.append(form('Rename school',[name],n=>api().rpc('ss1_school_rename',{p_school:s.id,p_name:n})));
+ }
+ if(rights.manage_settings){
+  const tagline=field('Welcome message','Welcome to our school',s.branding?.tagline||'');
+  tagline.input.required=false;
+  const color=field('Accent color','#3478f6',s.branding?.accent||'#3478f6');
+  color.input.pattern='^#[0-9a-fA-F]{6}$';
+  const logo=field('HTTPS logo URL (optional)','https://school.example/logo.png',s.branding?.logo_url||'');
+  logo.input.required=false;
+  h.append(form('Save school appearance',[tagline,color,logo],(t,a,l)=>api().rpc('ss1_school_settings',{
+   p_school:s.id,p_name:s.name,p_tagline:t,p_accent:a,p_logo_url:l
+  })));
+ }
+ return rights.manage_schools||rights.manage_settings?h:null;
+}
+function analyticsPanel(s){
+ if(!(getRights(s).view_analytics||s.my_role==='principal'))return null;
+ const host=make('section',null,'ss-sm-card');host.append(heading('School analytics','Only aggregate numbers; no individual student work.'));
+ const metrics=make('div',null,'ss-sm-metrics');host.append(metrics);
+ host.append(btn('Refresh analytics',()=>void loadAnalytics(s.id,metrics)));
+ void loadAnalytics(s.id,metrics);return host;
+}
+async function loadAnalytics(id,host){
+ if(!host.isConnected)return;host.textContent='Loading school statistics…';
+ try{const result=await api().rpc('ss1_school_analytics',{p_school:id});
+  if(!host.isConnected||id!==schoolId)return;
+  host.replaceChildren();
+  for(const key of ['students','teachers','principals','classes','assignments','submissions']){
+   const card=make('div',null,'ss-sm-metric');card.append(make('strong',Number(result?.[key]||0)),make('small',key));host.append(card);
+  }
+ }catch(e){if(host.isConnected)host.textContent=String(e?.message||e)}
+}
+function shareInvite(s){
+ const u=new URL(location.href);u.searchParams.set('join_school',s.code);
+ const link=u.href;
+ if(navigator.clipboard?.writeText)navigator.clipboard.writeText(link).then(()=>note('School join link copied. All joins still require approval.')).catch(()=>prompt('Copy invite link:',link));
+ else prompt('Copy invite link:',link);
+}
+function details(){
+ const host=$('ssSchoolDetail');if(!host)return;host.replaceChildren(join());
+ const s=school();if(!s)return;
+ const panel=make('section',null,'ss-sm-card');
+ const title=make('div',null,'ss-sm-org-head');
+ const h=heading('🏫 '+s.name,s.branding?.tagline||'A connected StudySpire school');
+ title.append(h);title.append(make('span',s.my_role||s.is_admin?'School '+(s.my_role||'admin'):'School Leader','ss-sm-pill'));
+ panel.append(title);
+ const code=make('p','Join code: '+s.code,'ss-sm-muted');panel.append(code,btn('Copy school invite',()=>shareInvite(s)));
+ host.prepend(panel);
+ const courses=make('section',null,'ss-sm-card');
+ courses.append(heading('Classes','Your school classes connect to assignments, quizzes and gradebook.'));
+ for(const cls of s.classes||[]){
+  const row=make('div',null,'ss-sm-line');
+  row.append(make('strong',cls.title),make('small',cls.subject||''));
+  row.append(btn('Open classroom',()=>window.StudySpireClassroom?.open?.(cls.id,cls.title)));
+  courses.append(row);
+ }
+ if(!(s.classes||[]).length)courses.append(make('p','No classes yet. A principal or Owner can create one.','ss-sm-muted'));
+ if(getRights(s).manage_schools||s.my_role==='principal'||data.is_owner){
+  const name=field('Class name','English I'),subject=field('Subject','English');
+  subject.input.required=false;
+  courses.append(form('Create class',[name,subject],(n,sub)=>api().rpc('ss_school_create_class',{p_school:s.id,p_title:n,p_subject:sub})));
+ }
+ host.append(courses);
+ for(const card of [adminTools(s),roster(s),applicationsPanel(s),announcementPanel(s),settingsPanel(s),analyticsPanel(s)]){if(card)host.append(card)}
+}
+function draw(){side();details()}
+async function loadPending(){
+ const s=school();pending=[];
+ if(!s||!(getRights(s).manage_enrollment||s.my_role==='principal')){draw();return}
+ try{const rows=await api().rpc('ss1_school_pending',{p_school:s.id});if(schoolId===s.id){pending=Array.isArray(rows)?rows:[];draw()}}
+ catch(e){note('Could not load school applications: '+String(e?.message||e))}
+}
+async function refresh(){
+ const serial=++sequence;
+ const connected=window.StudySpireSchoolBridge?.ready?.();
+ showLaunchers(!!connected);
+ if(!connected){data={is_owner:false,schools:[]};close();return}
  try{
-  const [response,requests]=await Promise.all([api.rpc('ss_school_overview'),api.rpc('ss_school_my_join_requests')]);
-  if(serial!==refreshSerial)return;
-  state={is_owner:response?.is_owner===true,organizations:Array.isArray(response?.organizations)?response.organizations:[],
-   requests:Array.isArray(requests)?requests:[],pending:[]};
-  if(!state.organizations.some(o=>o.id===chosenOrg))chosenOrg=state.organizations[0]?.id||'';
-  const org=selectedOrg();
-  if(!org?.schools?.some(s=>s.id===chosenSchool))chosenSchool=org?.schools?.[0]?.id||'';
-  const school=selectedSchool(org);
-  if(school?.can_manage_members){
-   const pending=await api.rpc('ss_school_pending_join_requests',{p_school:school.id});
-   if(serial!==refreshSerial)return;
-   state.pending=Array.isArray(pending)?pending:[];
+  const [result,requests]=await Promise.all([
+   api().rpc('ss1_school_overview'),api().rpc('ss_school_my_join_requests')
+  ]);
+  if(serial!==sequence)return;
+  data={is_owner:result?.is_owner===true,schools:Array.isArray(result?.schools)?result.schools:[]};
+  applications=Array.isArray(requests)?requests:[];
+  if(!data.schools.some(s=>s.id===schoolId)){
+   let saved='';try{saved=localStorage.getItem(KEY)||''}catch{}
+   schoolId=data.schools.some(s=>s.id===saved)?saved:data.schools[0]?.id||'';
   }
-  showLaunchers(true);render();
- }catch(err){
-  if(serial!==refreshSerial)return;
-  showLaunchers(true);
-  if(byId(ID)&&!byId(ID).hidden){
-   info('School tools are unavailable: '+String(err?.message||err)+'. Check that studyspire1-school-join.sql is installed.');
+  pending=[];draw();void loadPending();
+ }catch(e){if(serial===sequence)note('School access unavailable: '+String(e?.message||e)+'. Check the school-only SQL migration.')}
+}
+function initialize(){
+ mount();window.addEventListener('ss-cloud-auth-changed',()=>{void refresh()});
+ if(window.StudySpireSchoolBridge?.ready?.())void refresh();
+ const qs=new URLSearchParams(location.search);
+ if(qs.has('join_school')){
+  const c=qs.get('join_school');
+  if(/^[a-z0-9-]{3,40}$/.test(c||'')){
+   open();
+   const select=()=>{const candidates=[...document.querySelectorAll('#ssSchoolDetail input')];const target=candidates.find(x=>x.placeholder.includes('central-high'));if(target){target.value=c||'';return true}return false};
+   setTimeout(select,350);
   }
  }
 }
-function onAuth(){
- if(!mounted)mountNav();
- void refresh();
- if(!inviteOpened&&window.StudySpireSchoolBridge?.ready?.()){
-  const qs=new URLSearchParams(window.location.search);
-  if(qs.has('join_org')&&qs.has('join_school')){inviteOpened=true;open()}
- }
-}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{mountNav();if(window.StudySpireSchoolBridge?.ready?.())onAuth()},{once:true});
-else {mountNav();if(window.StudySpireSchoolBridge?.ready?.())onAuth()}
-window.addEventListener('ss-cloud-auth-changed',onAuth);
-window.StudySpireSchoolManager={open,refresh:()=>refresh(true)};
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize,{once:true});else initialize();
+window.StudySpireSchoolManager={open,refresh};
 })();
