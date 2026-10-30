@@ -649,7 +649,7 @@ declare actor uuid:=public.ss1_platform_owner_id(); directory_id uuid;
  n text:=pg_catalog.btrim(coalesce(p_name,''));c text:=pg_catalog.lower(pg_catalog.btrim(coalesce(p_code,'')));
 begin
  if actor is null then raise exception 'Only an active platform Owner can create schools';end if;
- if pg_catalog.length(n) not between 2 and 100 or c !~ '^[a-z0-9][a-z0-9-]{1,39}
+ if pg_catalog.length(n) not between 2 and 100 or c !~ '^[a-z0-9][a-z0-9-]{1,39}$'
  then raise exception 'Enter a valid school name and unique code';end if;
  if exists(select 1 from public.ss_schools where code=c) then raise exception 'School code already in use';end if;
  insert into public.ss_organizations(name,code,created_by)
@@ -684,7 +684,7 @@ returns void language plpgsql security definer set search_path='' as $$
 declare actor uuid:=public.ss_school_actor(); school uuid; row_claim public.ss1_school_claims%rowtype; hashed text;
 begin
  if actor is null then raise exception 'Platform staff cannot join schools; sign in with a regular StudySpire account';end if;
- if pg_catalog.length(coalesce(p_claim_code,''))<>48 or p_claim_code !~ '^[a-f0-9]{48}
+ if pg_catalog.length(coalesce(p_claim_code,''))<>48 or p_claim_code !~ '^[a-f0-9]{48}$'
  then raise exception 'Enter the complete school activation code';end if;
  select id into school from public.ss_schools
  where code=pg_catalog.lower(pg_catalog.btrim(coalesce(p_school_code,'')))
@@ -715,7 +715,7 @@ begin
  if actor is null then raise exception 'Platform staff cannot manage school memberships';end if;
  if p_role not in ('school_admin','principal','teacher','student','remove')
  or p_role is null then raise exception 'Invalid school role';end if;
- if uname !~ '^[a-z0-9_-]{3,32} then raise exception 'Enter a valid username';end if;
+ if uname !~ '^[a-z0-9_-]{3,32}$' then raise exception 'Enter a valid username';end if;
  select id,role into target,target_platform from public.ss_profiles
  where username=uname and (not banned or (banned_until is not null and banned_until<=now()));
  if target is null then raise exception 'Active user not found';end if;
