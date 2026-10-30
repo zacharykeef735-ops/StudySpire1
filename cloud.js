@@ -508,11 +508,14 @@ window.StudySpireSchoolBridge={
  ready:()=>Boolean(ready&&client&&live&&person&&profile&&!banned(profile)),
  account:()=>live&&profile&&!banned(profile)?{username:profile.username,role:profile.role}:null,
  rpc:async(name,args={})=>{
-  const allowed=new Set(['ss_school_overview','ss_school_create_organization','ss_school_create_school','ss_school_set_admin','ss_school_set_member','ss_school_create_class',
-   'ss_school_classroom','ss_school_class_enroll','ss_school_create_assignment',
-   'ss_school_submit_assignment','ss_school_grade_assignment','ss_school_post_announcement',
-   'ss_school_request_join','ss_school_my_join_requests','ss_school_pending_join_requests',
-   'ss_school_review_join','ss_school_cancel_join']);
+  const allowed=new Set(['ss1_school_overview','ss1_school_create','ss1_school_set_admin',
+   'ss1_school_set_permission','ss1_school_set_member','ss1_school_request_join',
+   'ss1_school_pending','ss1_school_review_join','ss1_school_settings',
+   'ss1_school_rename','ss1_school_announce','ss1_school_analytics',
+   'ss_school_create_class','ss_school_classroom','ss_school_class_enroll',
+   'ss_school_create_assignment','ss_school_submit_assignment',
+   'ss_school_grade_assignment','ss_school_post_announcement',
+   'ss_school_my_join_requests','ss_school_cancel_join']);
   if(!allowed.has(name))throw Error('Unsupported school operation');
   if(!ready||!client||!live||!person||!profile||banned(profile))throw Error('Sign in to StudySpire Cloud first');
   const {data,error}=await client.rpc(name,args);
