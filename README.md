@@ -1,48 +1,53 @@
-# StudySpire1 — StudySpire + Schools 🏫
+# StudySpire1 — StudySpire + Independent Schools 🏫
 
-**StudySpire1 keeps the normal StudySpire interface and study tools.** Schools are an additional optional feature; there is no organization/district management screen, no AWS, and no change to the original `StudySpire` GitHub repository.
+**StudySpire1 keeps all the normal StudySpire study tools and adds schools directly. There is NO active organization/district system. No AWS.** The original `StudySpire` GitHub repository remains untouched.
 
-## School features (October 30, 2026)
+## Who controls what?
 
-Open **🏫 Schools** after signing in to StudySpire Cloud. Your AI Tutor, Mini, notes, flashcards, assignments, Study Rooms, and Smart Planner remain available exactly as before.
+- **Platform Owner:** Can **create schools**, **delete schools**, and provide a one-time activation code for a school's **first principal**. Can still use the existing platform moderation dashboard to handle reported or flagged items. The Owner **cannot see school rosters, classes, grades, attendance, submissions, or school settings** through the school dashboard.
+- **Platform Co-Owner / Admin / Moderator:** **Cannot be school staff or school members.** They have no school management privileges or school dashboard access. Platform moderation responsibilities remain separate from schools.
+- **School principal:** An eligible non-platform-staff account activates a newly created school with the one-time setup code. Principals independently manage school leadership, admin permissions, enrollment and classes. A school cannot remove its final principal through normal role management.
+- **School administrator:** Appointed by the school's principal; the principal controls six school-specific permission switches. An admin can never manage schools they do not belong to.
+- **Teachers/students:** Normal StudySpire accounts with optional school enrollment. Teachers manage work in their assigned classes; students only see the classes and school information they are authorized to access.
 
-- **Platform Owner:** Creates schools directly using a school name and unique join code. Appoints or removes school admins. Controls six school-specific admin permissions individually. Can appoint principals, view school analytics, change school settings, and publish announcements.
-- **School admin:** Can perform only those of the six operations that the Owner permits for their particular school. Cannot change their own permissions or administer other schools without being assigned.
-- **Principal:** Can review student/teacher school applications, assign school roles, create classes, enroll students/teachers into classes, and manage classroom work.
-- **Teacher:** Must be appointed at a school and enrolled in a class; can post class assignments, view and grade submissions for their assigned students, and publish class updates.
-- **Student:** Applies using **one school code**, waits for approval, then sees school announcements and school classes. Class access/submissions require separate class enrollment.
-- **School announcements:** School members see school-only updates; staff with the `publish_announcements` permission may post them.
-- **School branding:** School leaders with `manage_settings` can set welcome text, accent color, and an HTTPS logo URL.
-- **Analytics:** Authorized leaders can see aggregate school counts. They cannot use this dashboard to view private student submissions.
-- **Parent portal, formal report cards, LMS import, and offline school records:** Future development, **not implemented**.
+### Owner handoff
 
-### Owner's six permission switches
+1. Sign into **StudySpire Cloud** with your existing platform Owner account.
+2. Open **🏫 Schools**, create a school name and unique school code.
+3. Copy the newly generated **48-character activation code** and provide it privately to the school's designated principal. The code is shown once, expires, and can be regenerated only while the school has no principal.
+4. The principal signs into a regular non-platform-staff StudySpire account and uses **Activate as first principal** with the school code and activation code.
+5. The principal appoints school administrators, determines their six permissions, adds teachers/students and creates classes. The platform Owner cannot perform those actions.
+6. To delete a school, the Owner opens its school directory entry and types the exact school code to confirm. **Deletion permanently removes linked school records, including classes and schoolwork**, so review it carefully.
 
-| School-admin permission | Capability enforced by Supabase |
+### Principal-controlled administrator permissions
+
+| Permission | Controls |
 |---|---|
-| Create and manage schools | Rename their assigned school |
-| Appoint school principals | Appoint or remove school principals |
-| Manage student enrollment | Enroll/remove students and teachers; approve/decline join requests |
-| View school analytics | See aggregates for that school |
-| Publish school announcements | Post announcements to school members |
-| Manage school settings | Edit the school's welcome message, colors, and logo |
+| Manage schools | Rename the administrator's assigned school |
+| Appoint principals | School leadership changes are restricted to principals |
+| Manage enrollment | Student/teacher school membership and join approvals |
+| View analytics | Aggregate activity statistics for authorized school staff |
+| Publish announcements | Post school-wide notices |
+| Manage settings | Edit school welcome text, branding, and other settings |
 
-These roles are stored server-side in `ss1_school_admins`; simply changing the interface or browser storage **does not** grant access. The platform Owner creates new schools; school admins only manage their existing assigned school.
+**School principals retain final control of leadership roles and admin permissions.** Server-side Supabase functions enforce each operation; the UI alone is not a security boundary.
 
 ### Supabase setup
 
-The currently connected Supabase database has the migrations installed. For a fresh database, apply the original StudySpire account migrations first, then these in order:
+**Current database:** The organization tables `ss_organizations` and `ss_organization_admins`, all organization-ID columns, and legacy organization RPCs have been **removed**. School records now exist directly in `ss_schools`. The connected project currently has no active schools after the prior PPS cleanup.
 
-1. `studyspire1-organizations-schools.sql` — legacy-compatible school tables (an organization table remains internally as a foreign-key compatibility detail only).
-2. `studyspire1-academics.sql` — classes, enrollment, assignments, submissions and grades.
-3. `studyspire1-school-join.sql` — join-request table and cancellation RPC.
-4. `studyspire1-school-only.sql` — school-only owner management, join flow, six admin permissions, announcements and analytics.
+For an **entirely fresh database**, install the existing StudySpire account schema first and then run the school migration scripts **in this order**:
 
-**PPS clean slate:** On October 30, 2026, the existing `Piedmont Public Schools` entry and its unused internal organization record were deleted from the connected Supabase database at the user's request. At verification time, **0 schools and 0 internal organizations** remained. Platform accounts and personal StudySpire data were not deleted. This is a database action, not a seed script.
+1. `studyspire1-organizations-schools.sql` *(legacy historical bootstrap, needed to install the original school tables)*
+2. `studyspire1-academics.sql`
+3. `studyspire1-school-join.sql`
+4. `studyspire1-school-only.sql` *(historical pre-removal compatibility stage)*
+5. `studyspire1-school-first.sql`
+6. **`studyspire1-remove-organizations.sql`** *(mandatory final cleanup, removes legacy organization tables, columns and functions)*
 
-**Important:** This code repository is separate from `StudySpire`, but both frontends currently use the same Supabase project. A separate Supabase project is required for complete account/data independence. The historical internal organization table is retained to preserve foreign-key relationships, but it is not part of the school user experience.
+The **historical migration files** retain their original schema declarations so existing installation sequences remain reproducible; they are not an active organization feature. Do not stop setup before the final cleanup migration. School-specific activity remains scoped through secure server-side RPCs and protected tables.
 
-**Privacy:** This is still a beta; validate production student-data privacy, moderation, account identity, role permissions and retention procedures before real school deployment. Anonymous users cannot call school-management RPCs, and RLS and function permissions restrict student data.
+**Important privacy note:** This repository is separate from `StudySpire`, but it currently shares the existing Supabase project and StudySpire account records. For complete separation, a second Supabase project is required. Production school/student use needs an independent security review, especially moderation, authentication, access controls, retention, and audit handling.
 
 ---
 
