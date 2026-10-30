@@ -513,39 +513,39 @@ revoke execute on function public.ss_school_set_member(uuid,text,text) from publ
 -- Central staff exclusion for ALL legacy school, class and enrollment functions.
 -- ss_current_profile_id supports StudySpire's username-only sessions.
 create or replace function public.ss_school_actor()
-returns uuid language sql stable security definer set search_path='' as $
+returns uuid language sql stable security definer set search_path='' as $$
  select p.id from public.ss_profiles p
  where p.id=(select public.ss_current_profile_id())
    and p.role not in ('owner','co_owner','admin','moderator')
    and (not p.banned or (p.banned_until is not null and p.banned_until<=now()))
  limit 1
-$;
+$$;
 -- The former cross-organization staff role is retired. It must not grant access
 -- just because someone was previously an organization administrator.
 create or replace function public.ss_school_org_admin(p_organization uuid)
-returns boolean language sql stable security definer set search_path='' as $
+returns boolean language sql stable security definer set search_path='' as $$
  select false
-$;
+$$;
 -- Former platform-owner bypass in classroom/gradebook RPCs is disabled.
 create or replace function public.ss_school_platform_owner()
-returns boolean language sql stable security definer set search_path='' as $
+returns boolean language sql stable security definer set search_path='' as $$
  select false
-$;
+$$;
 
 -- Platform lifecycle authority is strictly the verified active Owner (NOT
 -- Co-Owner, Admin, Moderator). This function is never granted to browser roles.
 create or replace function public.ss1_platform_owner_id()
-returns uuid language sql stable security definer set search_path='' as $
+returns uuid language sql stable security definer set search_path='' as $$
  select p.id from public.ss_profiles p
  where p.id=(select public.ss_current_profile_id()) and p.role='owner'
    and (not p.banned or (p.banned_until is not null and p.banned_until<=now()))
  limit 1
-$;
+$$;
 
 -- Existing school leaders manage every day-to-day school staff role.
 -- No platform staff can be appointed, even by legacy functions.
 create or replace function public.ss1_reject_platform_staff()
-returns trigger language plpgsql security definer set search_path='' as $
+returns trigger language plpgsql security definer set search_path='' as $$
 begin
  if exists (select 1 from public.ss_profiles p where p.id=new.profile_id
     and p.role in ('owner','co_owner','admin','moderator')) then
@@ -566,7 +566,7 @@ for each row execute function public.ss1_reject_platform_staff();
 -- Staff promotions remove existing school affiliations. Schoolwork records are
 -- preserved for school leaders to audit but access to them is withdrawn.
 create or replace function public.ss1_remove_promoted_staff_school_access()
-returns trigger language plpgsql security definer set search_path='' as $
+returns trigger language plpgsql security definer set search_path='' as $$
 begin
  if new.role in ('owner','co_owner','admin','moderator')
     and old.role is distinct from new.role then
@@ -606,7 +606,7 @@ alter table public.ss1_school_claims enable row level security;
 revoke all on public.ss1_school_claims from public,anon,authenticated;
 
 create or replace function public.ss1_issue_school_claim(p_school uuid)
-returns text language plpgsql security definer set search_path='' as $
+returns text language plpgsql security definer set search_path='' as $$
 declare code text;
 begin
  if public.ss1_platform_owner_id() is null then raise exception 'Only a platform Owner can provision a new school';end if;
@@ -626,7 +626,7 @@ end $;
 -- Return only school name/code and setup status, never rosters, grades, or
 -- join applications. Co-Owners do not get this Owner lifecycle directory.
 create or replace function public.ss1_owner_school_directory()
-returns jsonb language sql stable security definer set search_path='' as $
+returns jsonb language sql stable security definer set search_path='' as $$
  select case when public.ss1_platform_owner_id() is null then
    pg_catalog.jsonb_build_object('error','Owner required')
  else pg_catalog.jsonb_build_object(
@@ -637,13 +637,13 @@ returns jsonb language sql stable security definer set search_path='' as $
      order by s.name)
    from public.ss_schools s),'[]'::jsonb))
  end
-$;
+$$;
 
 -- New signature returns the claim code to show just once. The owner ONLY
 -- creates the school; no role is assigned to the owner.
 drop function if exists public.ss1_create_school(text,text);
 create function public.ss1_create_school(p_name text,p_code text)
-returns jsonb language plpgsql security definer set search_path='' as $
+returns jsonb language plpgsql security definer set search_path='' as $$
 declare actor uuid:=public.ss1_platform_owner_id(); directory_id uuid;
  school uuid; code text;
  n text:=pg_catalog.btrim(coalesce(p_name,''));c text:=pg_catalog.lower(pg_catalog.btrim(coalesce(p_code,'')));
@@ -666,7 +666,7 @@ begin
 end $;
 
 create or replace function public.ss1_delete_school(p_school uuid,p_confirm_code text)
-returns void language plpgsql security definer set search_path='' as $
+returns void language plpgsql security definer set search_path='' as $$
 declare actor uuid:=public.ss1_platform_owner_id(); school public.ss_schools%rowtype;
 begin
  if actor is null then raise exception 'Only a platform Owner can delete schools';end if;
@@ -680,7 +680,7 @@ begin
 end $;
 
 create or replace function public.ss1_claim_school(p_school_code text,p_claim_code text)
-returns void language plpgsql security definer set search_path='' as $
+returns void language plpgsql security definer set search_path='' as $$
 declare actor uuid:=public.ss_school_actor(); school uuid; row_claim public.ss1_school_claims%rowtype; hashed text;
 begin
  if actor is null then raise exception 'Platform staff cannot join schools; sign in with a regular StudySpire account';end if;
@@ -708,7 +708,7 @@ end $;
 -- School principals, not platform staff, appoint/manage school admins and
 -- principals. School admins receive only explicitly granted permissions.
 create or replace function public.ss1_set_school_role(p_school uuid,p_username text,p_role text)
-returns void language plpgsql security definer set search_path='' as $
+returns void language plpgsql security definer set search_path='' as $$
 declare actor uuid:=public.ss_school_actor(); target uuid; prior text; target_platform text;
  uname text:=pg_catalog.lower(pg_catalog.btrim(coalesce(p_username,'')));
 begin
@@ -750,7 +750,7 @@ begin
 end $;
 
 create or replace function public.ss1_set_admin_permissions(p_school uuid,p_username text,p_permissions jsonb)
-returns void language plpgsql security definer set search_path='' as $
+returns void language plpgsql security definer set search_path='' as $$
 declare actor uuid:=public.ss_school_actor();target uuid; key text; val jsonb;
 begin
  if actor is null or not public.ss_school_principal(p_school) then
