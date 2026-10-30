@@ -77,10 +77,22 @@ end $$;
 create or replace function public.ss1_school_create(p_name text,p_code text)
 returns uuid language plpgsql security definer set search_path='' as $$
 declare actor uuid:=public.ss_school_actor(); org uuid; school uuid;
- n text:=btrim(coalesce(p_name,'')); code text:=lower(btrim(coalesce(p_code,'')));
+ n text:=btrim(coalesce(p_name,'')); v_code text:=lower(btrim(coalesce(p_code,'')));
 begin
  if actor is null or not public.ss1_owner() then raise exception 'Only the platform Owner can create schools';end if;
- if length(n) not between 2 and 100 or code !~ '^[a-z0-9][a-z0-9-]{2,39}$' then
+ if length(n) not between 2 and 100 or v_code !~ '^[a-z0-9][a-z0-9-]{2,39} then
+  raise exception 'School name must be 2-100 characters; code 3-40 lowercase letters, digits or dashes';end if;
+ if exists(select 1 from public.ss_schools where lower(join_code)=v_code)
+ then raise exception 'That school join code is already in use';end if;
+ org:=gen_random_uuid();
+ insert into public.ss_organizations(id,name,code,created_by)
+ values(org,n,'school-'||replace(org::text,'-',''),actor);
+ insert into public.ss_schools(organization_id,name,code,join_code,created_by)
+ values(org,n,v_code,v_code,actor) returning id into school;
+ insert into public.ss_school_audit(actor_id,organization_id,school_id,action,detail)
+ values(actor,org,school,'school_created',n);
+ return school;
+end $$; then
   raise exception 'School name must be 2-100 characters; code 3-40 lowercase letters, digits or dashes';end if;
  if exists(select 1 from public.ss_schools where lower(join_code)=code)
  then raise exception 'That school join code is already in use';end if;
@@ -174,11 +186,25 @@ end $$;
 
 create or replace function public.ss1_school_request_join(p_code text,p_role text,p_note text default '')
 returns jsonb language plpgsql security definer set search_path='' as $$
-declare actor uuid:=public.ss_school_actor(); school uuid; n text; request_id uuid; code text:=lower(btrim(coalesce(p_code,'')));
+declare actor uuid:=public.ss_school_actor(); school uuid; n text; request_id uuid; v_code text:=lower(btrim(coalesce(p_code,'')));
 begin
  if actor is null then raise exception 'Sign in first';end if;
  if p_role not in ('student','teacher') then raise exception 'Choose Student or Teacher';end if;
- if code !~ '^[a-z0-9][a-z0-9-]{2,39}$' then raise exception 'Enter a valid school code';end if;
+ if v_code !~ '^[a-z0-9][a-z0-9-]{2,39} then raise exception 'Enter a valid school code';end if;
+ if length(btrim(coalesce(p_note,'')))>300 then raise exception 'Message too long';end if;
+ select id,name into school,n from public.ss_schools where join_code=v_code;
+ if school is null then raise exception 'School code not found';end if;
+ if exists(select 1 from public.ss_school_memberships where school_id=school and profile_id=actor)
+ then raise exception 'You already belong to that school';end if;
+ if exists(select 1 from public.ss_school_join_requests where school_id=school and profile_id=actor and status='pending')
+ then raise exception 'Your request is already pending';end if;
+ if (select count(*) from public.ss_school_join_requests where profile_id=actor and status='pending')>=5
+ or (select count(*) from public.ss_school_join_requests where profile_id=actor and requested_at>now()-interval '1 day')>=10
+ then raise exception 'School join request limit reached';end if;
+ insert into public.ss_school_join_requests(school_id,profile_id,requested_role,note)
+ values(school,actor,p_role,btrim(coalesce(p_note,''))) returning id into request_id;
+ return jsonb_build_object('id',request_id,'school_name',n,'status','pending');
+end $$; then raise exception 'Enter a valid school code';end if;
  if length(btrim(coalesce(p_note,'')))>300 then raise exception 'Message too long';end if;
  select id,name into school,n from public.ss_schools where join_code=code;
  if school is null then raise exception 'School code not found';end if;
@@ -210,14 +236,14 @@ end $$;
 
 create or replace function public.ss1_school_review_join(p_request uuid,p_approve boolean)
 returns void language plpgsql security definer set search_path='' as $$
-declare actor uuid:=public.ss_school_actor(); school uuid; target uuid;requested text;status text;
+declare actor uuid:=public.ss_school_actor(); school uuid; target uuid;requested text;v_status text;
 begin
  select school_id,profile_id,requested_role,q.status
- into school,target,requested,status from public.ss_school_join_requests q where q.id=p_request for update;
+ into school,target,requested,v_status from public.ss_school_join_requests q where q.id=p_request for update;
  if school is null or actor is null or not
  (public.ss1_school_permission(school,'manage_enrollment') or public.ss_school_principal(school))
  then raise exception 'Permission denied: manage_enrollment';end if;
- if status<>'pending' then raise exception 'Already reviewed';end if;
+ if v_status<>'pending' then raise exception 'Already reviewed';end if;
  if p_approve is null then raise exception 'Approval decision missing';end if;
  if p_approve then
   if not exists(select 1 from public.ss_profiles p where p.id=target and (not p.banned or p.banned_until<=now()))
