@@ -246,7 +246,7 @@ function details(){
   courses.append(row);
  }
  if(!(s.classes||[]).length)courses.append(make('p','No classes yet. A principal or Owner can create one.','ss-sm-muted'));
- if(getRights(s).manage_schools||s.my_role==='principal'||data.is_owner){
+ if(s.my_role==='principal'||data.is_owner){
   const name=field('Class name','English I'),subject=field('Subject','English');
   subject.input.required=false;
   courses.append(form('Create class',[name,subject],(n,sub)=>api().rpc('ss_school_create_class',{p_school:s.id,p_title:n,p_subject:sub})));
