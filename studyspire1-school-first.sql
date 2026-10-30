@@ -264,7 +264,7 @@ begin
  return result;
 end $$;
 create or replace function public.ss1_my_join_requests()
-returns jsonb language plpgsql stable security definer set search_path='' as $
+returns jsonb language plpgsql stable security definer set search_path='' as $schoolJoin$
 declare actor uuid:=public.ss_school_actor(); data jsonb;
 begin
  if actor is null then raise exception 'Sign in to StudySpire Cloud first';end if;
@@ -274,7 +274,7 @@ begin
  from public.ss_school_join_requests q join public.ss_schools s on s.id=q.school_id
  where q.profile_id=actor;
  return data;
-end $;
+end $schoolJoin$;
 create or replace function public.ss1_pending_join_requests(p_school uuid)
 returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare result jsonb;
