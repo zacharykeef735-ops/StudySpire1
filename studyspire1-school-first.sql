@@ -5,6 +5,10 @@
 begin;
 
 -- School admins are independent of platform admins and never gain platform powers.
+-- Keep old school links valid, but new schools do not belong to any organization.
+alter table public.ss_schools alter column organization_id drop not null;
+create unique index if not exists ss1_schools_global_code_unique on public.ss_schools(code);
+
 alter table public.ss_school_memberships drop constraint if exists ss_school_memberships_role_check;
 alter table public.ss_school_memberships add constraint ss_school_memberships_role_check
  check (role in ('school_admin','principal','teacher','student'));
@@ -103,7 +107,7 @@ begin
  if p_school is null or public.ss_school_actor() is null then return false; end if;
  if public.ss1_is_owner() then return true; end if;
  role_name:=public.ss1_school_role(p_school);
- if role_name='principal' then return true; end if;
+ if role_name='principal' then return p_permission<>'appoint_principals'; end if;
  if role_name<>'school_admin' then return false; end if;
  if p_permission not in ('manage_schools','appoint_principals','manage_enrollment',
   'view_analytics','publish_announcements','manage_settings') then return false; end if;
@@ -124,20 +128,16 @@ $$;
 
 create or replace function public.ss1_create_school(p_name text,p_code text)
 returns uuid language plpgsql security definer set search_path='' as $$
-declare actor uuid:=public.ss_school_actor(); directory_id uuid; result uuid;
+declare actor uuid:=public.ss_school_actor(); result uuid;
  n text:=btrim(coalesce(p_name,''));c text:=lower(btrim(coalesce(p_code,'')));
 begin
  if actor is null or not public.ss1_is_owner() then raise exception 'Only a platform Owner can create schools';end if;
  if length(n) not between 2 and 100 or c !~ '^[a-z0-9][a-z0-9-]{1,39}$'
  then raise exception 'Enter a valid school name and unique code'; end if;
  if exists(select 1 from public.ss_schools where code=c) then raise exception 'School code already used';end if;
- -- Internal compatibility container only. Not a public organization feature.
- insert into public.ss_organizations(name,code,created_by)
- values('StudySpire1 school directory','studyspire1-school-directory',actor)
- on conflict(code) do nothing;
- select id into directory_id from public.ss_organizations where code='studyspire1-school-directory';
- insert into public.ss_schools(organization_id,name,code,created_by)
- values(directory_id,n,c,actor) returning id into result;
+ -- New schools have no organization. Old organization-linked schools are preserved.
+ insert into public.ss_schools(name,code,created_by)
+ values(n,c,actor) returning id into result;
  insert into public.ss1_school_branding(school_id) values(result);
  insert into public.ss_school_audit(actor_id,school_id,action,detail) values(actor,result,'school_created',n);
  return result;
@@ -263,6 +263,18 @@ begin
  values(sid,actor,p_role,coalesce(p_note,'')) returning id into result;
  return result;
 end $$;
+create or replace function public.ss1_my_join_requests()
+returns jsonb language plpgsql stable security definer set search_path='' as $
+declare actor uuid:=public.ss_school_actor(); data jsonb;
+begin
+ if actor is null then raise exception 'Sign in to StudySpire Cloud first';end if;
+ select coalesce(jsonb_agg(jsonb_build_object('id',q.id,'school',s.name,'school_code',s.code,
+  'role',q.requested_role,'note',q.note,'status',q.status,'created_at',q.requested_at)
+  order by q.requested_at desc),'[]'::jsonb) into data
+ from public.ss_school_join_requests q join public.ss_schools s on s.id=q.school_id
+ where q.profile_id=actor;
+ return data;
+end $;
 create or replace function public.ss1_pending_join_requests(p_school uuid)
 returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare result jsonb;
@@ -458,6 +470,7 @@ revoke execute on function public.ss1_set_school_role(uuid,text,text) from publi
 revoke execute on function public.ss1_set_admin_permissions(uuid,text,jsonb) from public,anon,authenticated;
 revoke execute on function public.ss1_school_overview() from public,anon,authenticated;
 revoke execute on function public.ss1_join_school(text,text,text) from public,anon,authenticated;
+revoke execute on function public.ss1_my_join_requests() from public,anon,authenticated;
 revoke execute on function public.ss1_pending_join_requests(uuid) from public,anon,authenticated;
 revoke execute on function public.ss1_review_join(uuid,boolean) from public,anon,authenticated;
 revoke execute on function public.ss1_update_school(uuid,text,text,text,text) from public,anon,authenticated;
@@ -471,7 +484,7 @@ revoke execute on function public.ss1_school_audit(uuid) from public,anon,authen
 revoke execute on function public.ss1_substitute_plan(uuid,text) from public,anon,authenticated;
 grant execute on function public.ss1_create_school(text,text),
  public.ss1_set_school_role(uuid,text,text),public.ss1_set_admin_permissions(uuid,text,jsonb),
- public.ss1_school_overview(),public.ss1_join_school(text,text,text),
+ public.ss1_school_overview(),public.ss1_join_school(text,text,text),public.ss1_my_join_requests(),
  public.ss1_pending_join_requests(uuid),public.ss1_review_join(uuid,boolean),
  public.ss1_update_school(uuid,text,text,text,text),public.ss1_announce(uuid,text),
  public.ss1_schedule_event(uuid,text,text,timestamptz,timestamptz,text),
