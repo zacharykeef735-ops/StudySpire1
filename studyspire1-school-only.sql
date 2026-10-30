@@ -240,14 +240,13 @@ declare actor uuid:=public.ss_school_actor();v_name text:=btrim(coalesce(p_name,
  tagline text:=btrim(coalesce(p_tagline,'')); accent text:=btrim(coalesce(p_accent,''));
  logo text:=btrim(coalesce(p_logo_url,''));
 begin
- if not (public.ss1_school_permission(p_school,'manage_settings')
-   or public.ss1_school_permission(p_school,'manage_schools')) then
+ if not public.ss1_school_permission(p_school,'manage_settings') then
    raise exception 'Permission denied: manage_settings';end if;
  if length(v_name) not between 2 and 100 or length(tagline)>160 or accent !~ '^#[a-fA-F0-9]{6}$'
  then raise exception 'Invalid school name, tagline or color';end if;
  if logo<>'' and (length(logo)>600 or logo !~ '^https://[A-Za-z0-9_.:/%-]+$')
  then raise exception 'Logo must use a valid HTTPS image URL';end if;
- update public.ss_schools set name=v_name where id=p_school;
+ -- School name is changed only by the separate manage_schools permission.
  insert into public.ss1_school_branding(school_id,tagline,accent,logo_url,updated_by)
  values(p_school,tagline,accent,logo,actor)
  on conflict (school_id) do update set tagline=excluded.tagline,accent=excluded.accent,
@@ -331,6 +330,19 @@ begin
  return jsonb_build_object('is_owner',owner,'schools',data);
 end $$;
 
+
+create or replace function public.ss1_school_rename(p_school uuid,p_name text)
+returns void language plpgsql security definer set search_path='' as $$
+declare actor uuid:=public.ss_school_actor(); clean text:=btrim(coalesce(p_name,''));
+begin
+ if not public.ss1_school_permission(p_school,'manage_schools') then raise exception 'Permission denied: manage_schools';end if;
+ if length(clean) not between 2 and 100 then raise exception 'School name must be 2-100 characters';end if;
+ update public.ss_schools set name=clean where id=p_school;
+ if not found then raise exception 'School unavailable';end if;
+ insert into public.ss_school_audit(actor_id,school_id,action,detail)
+ values(actor,p_school,'school_renamed',clean);
+end $$;
+
 -- Remove all client access to legacy organization-management RPCs in StudySpire1's
 -- shared Supabase backend. These school-only RPCs replace them in the new UI.
 -- NOTE: these were only used by StudySpire1 school features, not the original StudySpire.
@@ -351,6 +363,7 @@ revoke execute on function public.ss1_school_set_member(uuid,text,text) from pub
 revoke execute on function public.ss1_school_request_join(text,text,text) from public,anon;
 revoke execute on function public.ss1_school_pending(uuid) from public,anon;
 revoke execute on function public.ss1_school_review_join(uuid,boolean) from public,anon;
+revoke execute on function public.ss1_school_rename(uuid,text) from public,anon;
 revoke execute on function public.ss1_school_settings(uuid,text,text,text,text) from public,anon;
 revoke execute on function public.ss1_school_announce(uuid,text,text) from public,anon;
 revoke execute on function public.ss1_school_analytics(uuid) from public,anon;
@@ -362,6 +375,7 @@ grant execute on function public.ss1_school_create(text,text),
  public.ss1_school_request_join(text,text,text),
  public.ss1_school_pending(uuid),
  public.ss1_school_review_join(uuid,boolean),
+ public.ss1_school_rename(uuid,text),
  public.ss1_school_settings(uuid,text,text,text,text),
  public.ss1_school_announce(uuid,text,text),
  public.ss1_school_analytics(uuid),
